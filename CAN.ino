@@ -17,7 +17,7 @@ void canEvent0(void *pvParameters) {
       }
       Can0.clearInterrupts();
     }
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -39,7 +39,8 @@ void canEvent1(void *pvParameters) {
         }
       }
       Can1.clearInterrupts();
+      awake(500); // prevent idle timeout
     }
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(2));
   }
 }

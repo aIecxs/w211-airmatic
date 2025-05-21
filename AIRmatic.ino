@@ -54,7 +54,6 @@
 // CAN IDs Interior CAN-B
 #define CANID_2 0x01CA // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 #define CANID_3 0x001A // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
-#define CANID_4 0x0405 // ECU: OBF, NAME: NM_OBF, ID: 0x0405, NM, network management
 
 // CAN Frames Motor CAN-C
 struct EZS_240h_t EZS_240h; // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
@@ -81,6 +80,8 @@ int8_t offset_nv = 0; // mm front axle level custom offset
 int8_t offset_nh = 0; // mm rear axle level custom offset
 float factor = (float) duty * 2.0 / 100.0;
 
+volatile unsigned long timer = 0; // millis()
+
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
 
@@ -91,11 +92,13 @@ TaskHandle_t canTask1;
 void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
 {
 /*
-  Serial.write((uint8_t)(id >> 8));
-  Serial.write((uint8_t)(id & 0xFF));
-  Serial.write((uint8_t)len);
-  Serial.write(msg, len);
-  delay(10);
+  if (id != 0x0000) {
+    Serial.write((uint8_t)(id >> 8));
+    Serial.write((uint8_t)(id & 0xFF));
+    Serial.write((uint8_t)len);
+    Serial.write(msg, len);
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 */
   switch(id) {
     case CANID_0:
@@ -103,7 +106,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
         memcpy(&EZS_240h, msg, len); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
       } else {
         Serial.printf("WARNING: CANID 0x%04X: frame too long, struct size is %d bytes\r\n", id, sizeof(EZS_240h));
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
       }
       break;
     case CANID_1:
@@ -111,7 +114,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
         memcpy(&FS_340h, msg, len); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
       } else {
         Serial.printf("WARNING: CANID 0x%04X: frame too long, struct size is %d bytes\r\n", id, sizeof(FS_340h));
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
       }
       break;
     case CANID_2:
@@ -119,7 +122,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
         memcpy(&KOMBI_A5, msg, len); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
       } else {
         Serial.printf("WARNING: CANID 0x%04X: frame too long, struct size is %d bytes\r\n", id, sizeof(KOMBI_A5));
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
       }
       break;
     case CANID_3:
@@ -127,16 +130,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
         memcpy(&UBF_A1, msg, len); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
       } else {
         Serial.printf("WARNING: CANID 0x%04X: frame too long, struct size is %d bytes\r\n", id, sizeof(UBF_A1));
-        delay(100);
-      }
-      break;
-    case CANID_4: // ECU: OBF, NAME: NM_OBF, ID: 0x0405, NM, network management / FD 07 FF FF FF FF FF FF
-      if (len == 8 && msg[0] == 0xFD && msg[1] == 0x07 && msg[2] == 0xFF && msg[3] == 0xFF && msg[4] == 0xFF && msg[5] == 0xFF && msg[6] == 0xFF && msg[7] == 0xFF) {
-        // put TJA1055 into go-to-sleep
-        digitalWrite(STB, LOW);
-        delay(1);
-        digitalWrite(EN, LOW);
-        delay(100);
+        vTaskDelay(pdMS_TO_TICKS(100));
       }
       break;
   }
@@ -358,7 +352,7 @@ void _debug_KOMBI_A5_print(unsigned int delayMs)
   {
     time = millis();
     Serial.println("bitfield 1");
-    Serial.print("KI_STAT = "); Serial.print(KOMBI_A5.KI_STAT, DEC); Serial.println(" Status Kombi");  // 5 tel
+    Serial.print("KI_STAT = "); Serial.print(KOMBI_A5.KI_STAT, DEC); Serial.println(" Status Kombi"); 
 /*
     Serial.print("KI_STAT = ");
     if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::Neutral) {
@@ -385,15 +379,14 @@ void _debug_KOMBI_A5_print(unsigned int delayMs)
     Serial.println(" Status Kombi");
 */
     Serial.println("bitfield 2");
-    Serial.print("BUTTON_4_2 = "); Serial.print(KOMBI_A5.BUTTON_4_2, DEC); Serial.println(" Telefon End");   //CANCEL
-    Serial.print("BUTTON_4_1 = "); Serial.print(KOMBI_A5.BUTTON_4_1, DEC); Serial.println(" Telefon Send");  //SAVE
-    Serial.print("BUTTON_3_2 = "); Serial.print(KOMBI_A5.BUTTON_3_2, DEC); Serial.println(" Taste \"-\"");  //LOWER
-    Serial.print("BUTTON_3_1 = "); Serial.print(KOMBI_A5.BUTTON_3_1, DEC); Serial.println(" Taste \"+\"");  //HIGHER
+    Serial.print("BUTTON_4_2 = "); Serial.print(KOMBI_A5.BUTTON_4_2, DEC); Serial.println(" Telefon End");
+    Serial.print("BUTTON_4_1 = "); Serial.print(KOMBI_A5.BUTTON_4_1, DEC); Serial.println(" Telefon Send");
+    Serial.print("BUTTON_3_2 = "); Serial.print(KOMBI_A5.BUTTON_3_2, DEC); Serial.println(" Taste \"-\"");
+    Serial.print("BUTTON_3_1 = "); Serial.print(KOMBI_A5.BUTTON_3_1, DEC); Serial.println(" Taste \"+\"");
     Serial.print("BUTTON_2_2 = "); Serial.print(KOMBI_A5.BUTTON_2_2, DEC); Serial.println(" Reserve");
     Serial.print("BUTTON_2_1 = "); Serial.print(KOMBI_A5.BUTTON_2_1, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display");  //HINTEN
-    Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");   //VORNE
-  /*
+    Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display");
+    Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");
     Serial.println("bitfield 3");
     Serial.print("BUTTON_8_2 = "); Serial.print(KOMBI_A5.BUTTON_8_2, DEC); Serial.println(" Reserve");
     Serial.print("BUTTON_8_1 = "); Serial.print(KOMBI_A5.BUTTON_8_1, DEC); Serial.println(" Reserve");
@@ -412,7 +405,6 @@ void _debug_KOMBI_A5_print(unsigned int delayMs)
     Serial.print("PTT_2_1 = "); Serial.print(KOMBI_A5.PTT_2_1, DEC); Serial.println(" Reserve");
     Serial.print("PTT_1_2 = "); Serial.print(KOMBI_A5.PTT_1_2, DEC); Serial.println(" Linguatronic deaktivieren");
     Serial.print("PTT_1_1 = "); Serial.print(KOMBI_A5.PTT_1_1, DEC); Serial.println(" Linguatronic aktivieren");
-*/
   }
 }
 
@@ -463,6 +455,36 @@ void SerialPrintWarn(String text, unsigned int value, unsigned int delayMs) {
   }
 }
 
+void blink(gpio_num_t pin, unsigned int ontime) {
+  bool lastState = digitalRead(pin);
+  digitalWrite(pin, !lastState);
+  vTaskDelay(pdMS_TO_TICKS(ontime));
+  digitalWrite(pin, lastState);
+}
+
+// debounce key input
+uint8_t get_keyevent(bool button, uint8_t index) {
+  uint32_t now = millis();
+  static uint32_t pressTime[8] = {0};   // 0 = not pressed, nonzero = press timestamp
+  const uint32_t autoResetDelay = 1000; // max press time (ms)
+  if (button) {
+    if (pressTime[index] != 0) {
+      if (now - pressTime[index] > autoResetDelay) {
+        pressTime[index] = 0;
+        return 2;  // timeout (auto-reset)
+      } else {
+        return 1;
+      }
+    } else {
+      pressTime[index] = now;
+      return 1;  // rising edge detected
+    }
+  } else {
+    pressTime[index] = 0;
+    return 0; // not pressed
+  }
+}
+
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
   canInterruptFlag0 = true;
@@ -470,41 +492,40 @@ void IRAM_ATTR onCanInterrupt0() {
 void IRAM_ATTR onCanInterrupt1() {
   canInterruptFlag1 = true;
 }
-/*
+
 // power down no CAN traffic
-void go_to_sleep(gpio_num_t pin, unsigned int timeout) {
+void go_to_sleep(unsigned int timeout) {
+  if ( millis() - timer > timeout ) {
+    timer = millis();
+    Serial.println("Can1: timeout ... no traffic");
+    // put TJA1055 into go-to-sleep
+    digitalWrite(STB, LOW);
+    delay(1);
+    digitalWrite(EN, LOW);
+    delay(100);
+  }
+}
+
+// keep awake CAN traffic
+void awake(unsigned int delayMs) {
   static unsigned long time = millis();
-
-  static bool prevPin = HIGH;
-  bool currPin = digitalRead(pin);
-
-  // MCP2515 Interrupt Pin awake
-  if (prevPin == HIGH && currPin == LOW) {
-    time = millis(); // reset counter
+  if ( millis() - time > delayMs ) {
+    time = millis();
+    timer = time;
     // put TJA1055 into Normal Mode
     digitalWrite(STB, HIGH);
     digitalWrite(EN, HIGH);
-  } else
-	if ( millis() - time > timeout ) {
-      time = millis();
-      Serial.println("Can1: timeout ... no traffic");
-      // put TJA1055 into go-to-sleep
-      digitalWrite(STB, LOW);
-      delay(1);
-      digitalWrite(EN, LOW);
-      delay(100);
-    }
-  prevPin = currPin;
+  }
 }
-*/
+
 void setup() {
-  // create a task that will be executed along the loop() function, with priority 2 and executed on core 0
+  // create a task that will be executed along the loop() function, with priority 3 and executed on core 0
   xTaskCreatePinnedToCore(
     canEvent0,     // Task function
     "Can0 Events", // name of task
     4096,          // Stack size of task
     NULL,          // parameter of the task
-    2,             // priority of the task
+    3,             // priority of the task
     &canTask0,     // Task handle to keep track of created task
     0);            // pin task to core 0
   
@@ -518,7 +539,7 @@ void setup() {
     NULL,          // parameter of the task
     2,             // priority of the task
     &canTask1,     // Task handle to keep track of created task
-    1);            // pin task to core 0
+    1);            // pin task to core 1
 
   Serial.begin(115200, SERIAL_8N1, RX0, TX0);
   SPI.begin(SCK, MISO, MOSI);
@@ -528,6 +549,8 @@ void setup() {
   ^              ^       ^               ^     ^
   Sketch    OTA update   File system   EEPROM  WiFi config (SDK) */
   LittleFS.begin();
+
+  pinMode(LED_BUILTIN, OUTPUT);
 
   // MCP2515 Interrupts
   pinMode(INT0, INPUT);
@@ -580,16 +603,22 @@ void setup() {
   Can1.setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
   Can1.setFilter(MCP2515::RXF2, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
   Can1.setFilter(MCP2515::RXF3, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
-  Can1.setFilter(MCP2515::RXF4, false, CANID_4); // ECU: OBF, NAME: NM_OBF, ID: 0x0405, NM, network management
 
-  Can0.setListenOnlyMode();
-  Can1.setListenOnlyMode();
-
-  Serial.println("MCP2515 Initialized");
-  Serial.println("MCP2515 Initialized");
+  if (Can0.setListenOnlyMode() == MCP2515::ERROR_OK) {
+    Serial.println("MCP2515 initialized");
+  } else {
+    Serial.println("WARNING: MCP2515 not initialized");
+  }
+  if (Can1.setListenOnlyMode() == MCP2515::ERROR_OK) {
+    Serial.println("MCP2515 initialized");
+  } else {
+    Serial.println("WARNING: MCP2515 not initialized");
+  }
 }
 
 void loop() {
+  uint8_t pressedA = 0;
+  uint8_t pressedB = 0;
 /*
   // DEBUG
   exportMsg(CANID_0, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 8);
@@ -615,11 +644,146 @@ void loop() {
     // check the AIRmatic mode (Offroad/Comfort/Sport1/Sport2)
     // read offsets from table
       // on table: apply offsets
-
-    // check display is in main mode
+      offset_nv = 0;                   // mm front axle level custom offset
+      offset_nh = offset_nv;             // mm rear axle level custom offset
+*/
+    // check display is in phone mode
+    if (KOMBI_A5.KI_STAT == 5) {
       // get keyevents
-      // on confirm: write offsets to table
+      // FRONT + HIGHER
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_1, 0);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_3_1, 4);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_1 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_3_1 = 0; // timeout (auto-reset)
+        }
+        offset_nv += 5; // increase
+        Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");   // FRONT
+        Serial.print("BUTTON_3_1 = "); Serial.print(KOMBI_A5.BUTTON_3_1, DEC); Serial.println(" Taste \"+\"");  // HIGHER
+        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+        blink(LED_BUILTIN, 100);
+      }
+      // FRONT + LOWER
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_1, 0);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_3_2, 5);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_1 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_3_2 = 0; // timeout (auto-reset)
+        }
+        offset_nv -= 5; // decrease
+        Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");   // FRONT
+        Serial.print("BUTTON_3_2 = "); Serial.print(KOMBI_A5.BUTTON_3_2, DEC); Serial.println(" Taste \"-\"");  // LOWER
+        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+        blink(LED_BUILTIN, 100);
+      }
+      // REAR + HIGHER
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_2, 1);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_3_1, 4);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_2 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_3_1 = 0; // timeout (auto-reset)
+        }
+        offset_nh += 5; // increase
+        Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display"); // REAR
+        Serial.print("BUTTON_3_1 = "); Serial.print(KOMBI_A5.BUTTON_3_1, DEC); Serial.println(" Taste \"+\"");  // HIGHER
+        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+        blink(LED_BUILTIN, 100);
+      }
+      // REAR + LOWER
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_2, 1);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_3_2, 5);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_2 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_3_2 = 0; // timeout (auto-reset)
+        }
+        offset_nh -= 5; // decrease
+        Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display"); // REAR
+        Serial.print("BUTTON_3_2 = "); Serial.print(KOMBI_A5.BUTTON_3_2, DEC); Serial.println(" Taste \"-\"");  // LOWER
+        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+        blink(LED_BUILTIN, 100);
+      }
 
+      // on confirm: write offsets to table
+      // FRONT + SAVE
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_1, 0);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_4_1, 6);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_1 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_4_1 = 0; // timeout (auto-reset)
+        }
+        Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");   // FRONT
+        Serial.print("BUTTON_4_1 = "); Serial.print(KOMBI_A5.BUTTON_4_1, DEC); Serial.println(" Telefon Send"); // SAVE
+        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+        // on confirm: write offsets to table
+        blink(LED_BUILTIN, 100);
+      }
+      // REAR + SAVE
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_2, 1);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_4_1, 6);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_2 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_4_1 = 0; // timeout (auto-reset)
+        }
+        Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display"); // REAR
+        Serial.print("BUTTON_4_1 = "); Serial.print(KOMBI_A5.BUTTON_4_1, DEC); Serial.println(" Telefon Send"); // SAVE
+        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+        // on confirm: write offsets to table
+        blink(LED_BUILTIN, 100);
+      }
+      // FRONT + CANCEL
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_1, 0);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_4_2, 7);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_1 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_4_2 = 0; // timeout (auto-reset)
+        }
+        offset_nv = 0;
+        Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");   // FRONT
+        Serial.print("BUTTON_4_2 = "); Serial.print(KOMBI_A5.BUTTON_4_2, DEC); Serial.println(" Telefon End");  // CANCEL
+        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+        // on confirm: write offsets to table
+        blink(LED_BUILTIN, 100);
+      }
+      // REAR + CANCEL
+      pressedA = get_keyevent(KOMBI_A5.BUTTON_1_2, 1);
+      pressedB = get_keyevent(KOMBI_A5.BUTTON_4_2, 7);
+      if (pressedA && pressedB) {
+        if (pressedA == 2) {
+          KOMBI_A5.BUTTON_1_2 = 0; // timeout (auto-reset)
+        }
+        if (pressedB == 2) {
+          KOMBI_A5.BUTTON_4_2 = 0; // timeout (auto-reset)
+        }
+        offset_nh = 0;
+        Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display"); // REAR
+        Serial.print("BUTTON_4_2 = "); Serial.print(KOMBI_A5.BUTTON_4_2, DEC); Serial.println(" Telefon End");  // CANCEL
+        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+        // on confirm: write offsets to table
+        blink(LED_BUILTIN, 100);
+      }
+    }
+/*
   } else {
     SerialPrintWarn("Can0: timeout ... no traffic for CAN-ID: ", CANID_1, 10000);
     // turn off
@@ -632,20 +796,18 @@ void loop() {
 //  ledcWrite(PWM4, duty + offset_nh * factor); // NHLS1
 
   // todo: set custom level offset from steering wheel buttons
-  offset_nv = 0;                   // mm front axle level custom offset
+
   // for safety purposes - do not change
-  offset_nv < -MAX_OFF ? -MAX_OFF : offset_nv; // max suspension lowering
-  offset_nv > MAX_OFF ? MAX_OFF : offset_nv;   // max suspension height
-  offset_nh = offset_nv;             // mm rear axle level custom offset
-  offset_nh < -MAX_OFF ? -MAX_OFF : offset_nh; // max suspension lowering
-  offset_nh > MAX_OFF ? MAX_OFF : offset_nh;   // max suspension height
+  offset_nv = offset_nv < -MAX_OFF ? -MAX_OFF : offset_nv; // max suspension lowering
+  offset_nv = offset_nv > MAX_OFF ? MAX_OFF : offset_nv;   // max suspension height
+
+  offset_nh = offset_nh < -MAX_OFF ? -MAX_OFF : offset_nh; // max suspension lowering
+  offset_nh = offset_nh > MAX_OFF ? MAX_OFF : offset_nh;   // max suspension height
 
   // put TJA1055 into go-to-sleep / TJA1055 does the rest and will switch off TLE4271 automatically
-  go_to_sleep(INT1, 10000); // 10 sec
-
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+  go_to_sleep(10000); // 10 sec
 
   // Watchdog output pulse
   digitalWrite(WO, !digitalRead(WO));
-  delay(500);
+  delay(100);
 }
