@@ -26,7 +26,7 @@ See the [LICENSE](LICENSE) file for full details.
 
 **Credits**
 
-- **Concept and development**
+- **Concept and development**  
   Project Author: [aIecxs](https://github.com/aIecxs)  
 
 - **MCP2515 Arduino Library**  
@@ -148,12 +148,12 @@ See the [LICENSE](LICENSE) file for full details.
 
 ### PCB Design
 
-The printed circuit board (PCB) layout for this project was created using the **free Maker Edition of TARGET 3001!**, generously provided for non-commercial DIY use.
+The printed circuit board (PCB) layout for this project was created using the **Maker Edition of TARGET 3001!** generously provided for non-commercial DIY use.
 
 > PCB design made with the **TARGET 3001! Maker Edition**  
 > With kind permission of **IBF Electronic** – www.target3001.com
 
-Download full schematic and PCB [(LM2902N.T3001)](./XGerber.zip)
+Download full schematic and PCB [(LM2902N.T3001)](XGerber.zip)
 
 This license allows free usage exclusively for personal, non-commercial projects. Redistribution or commercial use of the PCB layout created with this software may require a separate license.
 
@@ -169,7 +169,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 2. **LittleFS support**  
    For file system operations (e.g. storing presets), install the [ESP32 LittleFS tool for Arduino IDE 2.x](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs) Add-on.
 
-3. **Fake CH341 Driver Removal (optional)**  
+3. **Fake CH341 Driver (optional)**  
    If you encounter serial driver conflicts under Windows, you may need to install fake CH341 drivers.
    [FakeCH341DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
 
@@ -181,12 +181,12 @@ To compile and upload the firmware to your ESP32, follow these steps:
   Use a DC-DC buck converter (12 V → 5 V) to supply power to the microcontroller (MCU).
 
 - **Connect PCB to control unit:**  
-  Wire battery voltage, ground, and the level sensor signal lines (input and output) between the PCB and the vehicle's air suspension ECU.
+  Wire battery voltage, ground, and the level sensor signal lines between the PCB and the vehicle's air suspension ECU.
   For a visual guide on wiring, refer to the following video:  
   [Wiring Overview Video](https://www.youtube.com/watch?v=JCMEg7JYTig)
 
 - **Connect MCU to CAN bus module:**  
-  Use the SPI interface (MOSI, MISO, SCK, CS) to communicate with the MCP2515 CAN module.
+  Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module.
 
 - **Connect MCU to PCB:**  
   Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino) for pins)
