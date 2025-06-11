@@ -1,8 +1,8 @@
 # AIRmatic Air Suspension Level Control DIY Kit
 
 **Description**  
-This project provides a DIY electronics kit for Mercedes-Benz vehicles equipped with the AIRmatic air suspension system.  
-It enables the individual adjustment of suspension level by manipulating the level sensor signals (0.5 V – 4.5 V range) by up to ±1 V.  
+This project provides a DIY electronics kit for Mercedes-Benz vehicles equipped with the **AIRmatic** air suspension system.  
+It enables the individual adjustment of suspension level by manipulating the level sensor signals (0.5V – 4.5V range) by up to ±1V.  
 Separate level settings can be configured for different driving modes (Comfort, Sport, Sport 2).
 
 ---
@@ -11,9 +11,12 @@ Separate level settings can be configured for different driving modes (Comfort, 
 This project is published solely as an informational DIY guide for private, non-commercial use.  
 No products, kits, or components are sold, supplied, or placed on the market.  
 The author does not act as a manufacturer, distributor, or operator placing products on the market under applicable product safety laws (such as EU Product Safety Directive or national laws).  
-Use at your own risk. No warranty is provided.  
-**This modification is intended for motorsport or off-road use only and is not approved for use on public roads.**  
-Installing this modification may **invalidate your vehicle's operating license and type approval**, and may be subject to local laws and regulations.  
+Use at your own risk. No warranty is provided.
+
+**This modification is intended for motorsport or off-road use only and is not approved for use on public roads.**
+
+Installing this modification may **invalidate your vehicle's operating license and type approval**, and may be subject to local laws and regulations.
+
 **The user assumes full responsibility for any legal consequences, including but not limited to liability for safety, damages, and compliance with regulations.**
 
 ---
@@ -34,12 +37,12 @@ See the [LICENSE](LICENSE) file for full details.
   [GitHub – autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
 
 - **Mercedes-Benz CAN Bus Research**  
-  CAN bus reverse engineering by [@rnd-ash](https://github.com/rnd-ash).  
+  CAN bus reverse engineering by @rnd-ash.  
   [GitHub – rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter%207%20In%20Car%20Entertainment.md)
   
   ---
   
-**`⚠️ UNFINISHED DRAFT – UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY – LOOSE COLLECTION OF INFORMATION ⚠️`**
+**`⚠️ UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY ⚠️`**
 
 
   **Offset Voltage**
@@ -70,9 +73,9 @@ See the [LICENSE](LICENSE) file for full details.
 
 ---
 
-### AIRmatic → NHRS2 only until 05/2005 or AMG models
+### AIRmatic - NHRS2 only until 05/2005 or AMG models
 
-#### Front Left Level Sensor (B22/8 → N51)
+#### Front Left Level Sensor (B22/8 -> N51)
 
 | Pin | Signal | Pin    | Color | Description |
 |-----|--------|--------|--------|-------------|
@@ -81,7 +84,7 @@ See the [LICENSE](LICENSE) file for full details.
 | 4   | NVLS1  | 38     | GNRD (green-red)   | Signal 1 front left level sensor |
 | 6   | NVLS2  | 34     | BKBU (black-blue)  | Signal 2 front left level sensor *(optional)* |
 
-#### Front Right Level Sensor (B22/9 → N51)
+#### Front Right Level Sensor (B22/9 -> N51)
 
 | Pin | Signal | Pin    | Color | Description |
 |-----|--------|--------|--------|-------------|
@@ -90,7 +93,7 @@ See the [LICENSE](LICENSE) file for full details.
 | 4   | NVRS1  | 40     | BKYE (black-yellow)| Signal 1 front right level sensor |
 | 6   | NVRS2  | 36     | BNRD (brown-red)   | Signal 2 front right level sensor *(optional)* |
 
-#### Rear Axle Level Sensor (B22/3 → N51)
+#### Rear Axle Level Sensor (B22/3 -> N51)
 
 | Pin | Signal | Pin    | Color | Description |
 |-----|--------|--------|--------|-------------|
@@ -101,7 +104,7 @@ See the [LICENSE](LICENSE) file for full details.
 
 ---
 
-### ENR Variant (Swapped NHRS1 / NHRV?) — B22/3 → N97
+### ENR Variant (Swapped NHRS1 / NHRV?) - B22/3 -> N97
 
 | Pin | Signal | Pin    | Color | Description |
 |-----|--------|--------|--------|-------------|
@@ -148,10 +151,8 @@ See the [LICENSE](LICENSE) file for full details.
 
 ### PCB Design
 
-The printed circuit board (PCB) layout for this project was created using the **Maker Edition of TARGET 3001!** generously provided for non-commercial DIY use.
-
-> PCB design made with the **TARGET 3001! Maker Edition**  
-> With kind permission of **IBF Electronic** – www.target3001.com
+The printed circuit board (PCB) layout for this project was created using the **Maker Edition of TARGET 3001!** generously provided for non-commercial DIY use.  
+With kind permission of **IBF Electronic** – www.target3001.com
 
 Download full schematic and PCB [(LM2902N.T3001)](XGerber.zip)
 
@@ -168,17 +169,25 @@ To compile and upload the firmware to your ESP32, follow these steps:
 
 2. **LittleFS support**  
    For file system operations (e.g. storing presets), install the [ESP32 LittleFS tool for Arduino IDE 2.x](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs) Add-on.
+   
+3. **MCP2515 CAN Library**  
+   Install the library via **Arduino Library Manager**: search for `autowp-mcp2515`  
+   [https://github.com/autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
 
-3. **Fake CH341 Driver (optional)**  
-   If you encounter serial driver conflicts under Windows, you may need to install fake CH341 drivers.
-   [FakeCH341DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
+4. **ArduinoJson Library**  
+   Install the library via **Arduino Library Manager**: search for `ArduinoJson`  
+   [https://github.com/bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+
+5. **Fake CH340 Driver (optional)**  
+   If you encounter serial driver conflicts under Windows, you may need to install fake CH340 drivers.
+   [FakeCH340DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
 
 ---
 
 ## Wiring
 
 - **Power Supply:**  
-  Use a DC-DC buck converter (12 V → 5 V) to supply power to the microcontroller (MCU).
+  Use a DC-DC buck converter (12V -> 5V) to supply power to the microcontroller (MCU).
 
 - **Connect PCB to control unit:**  
   Wire battery voltage, ground, and the level sensor signal lines between the PCB and the vehicle's air suspension ECU.

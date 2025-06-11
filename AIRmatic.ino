@@ -1,7 +1,8 @@
 /*
  * AIRmatic Air Suspension Level Control DIY Kit
  * 
- * Based on:
+ * Credits:
+ * - ArduinoJson (https://github.com/bblanchon/ArduinoJson)
  * - MCP2515 Arduino Library (https://github.com/autowp/arduino-mcp2515)
  * - CAN Bus reverse engineering by @rnd-ash (https://github.com/rnd-ash/mb-w211-pc)
  * 
@@ -11,6 +12,7 @@
 #include <SPI.h>
 #include <mcp2515.h>
 #include <LittleFS.h>
+#include <ArduinoJson.h>
 #include "w211_can_c.h"
 #include "w211_can_b.h"
 
@@ -58,6 +60,11 @@
 // copy CAN_message into bit field decoder
 #define copyMsg(ptr) importMsg(#ptr, ptr, sizeof(*(ptr)), id, msg, len)
 
+struct BlinkCmd {
+  gpio_num_t pin;
+  unsigned int ontime;
+};
+
 // CAN Frames Motor CAN-C
 struct EZS_240h_t EZS_240h; // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
 struct FS_340h_t FS_340h;   // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
@@ -79,17 +86,24 @@ const int freq = 4000; // 4 kHz
 const uint8_t res = 8; // resolution 255
 uint8_t duty = 115; // default 45% / adjust here if reference zero position for offset drifts away
 
+String mode = "default";
+const char* config = "/config.json";
 int8_t offset_nv = 0; // mm front axle level custom offset
 int8_t offset_nh = 0; // mm rear axle level custom offset
 float factor = (float) duty * 2.0 / 100.0;
 
 volatile unsigned long timer = 0; // millis()
 
+volatile bool canDown = true;
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
 
 TaskHandle_t canTask0; // Motor CAN-C
 TaskHandle_t canTask1; // Interior CAN-B
+
+TaskHandle_t blinkTask;
+QueueHandle_t blinkQueue;
+
 
 // import CAN_message into bit field decoder
 void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
@@ -97,7 +111,7 @@ void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, c
     memcpy(dest, msg, len);
   } else {
     Serial.printf("WARNING: CANID 0x%04X (%s): frame too long, struct size is %d bytes\r\n", id, name, (int)destSize);
-    vTaskDelay(pdMS_TO_TICKS(100));
+    delay(100);
   }
 }
 
@@ -110,7 +124,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
     Serial.write((uint8_t)(id & 0xFF));
     Serial.write((uint8_t)len);
     Serial.write(msg, len);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    delay(10);
   }
 */
   switch(id) {
@@ -448,12 +462,53 @@ void SerialPrintWarn(String text, unsigned int value, unsigned int delayMs) {
   }
 }
 
-// todo: non-blocking wrapper
+// non-blocking delayMicroseconds()
+void delay_us(uint32_t us) {
+    TaskHandle_t thisTask = xTaskGetCurrentTaskHandle();
+    // Timer callback: notify the sleeping task
+    auto timerCallback = [](void* arg) {
+        TaskHandle_t task = static_cast<TaskHandle_t>(arg);
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(task, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken) {
+            portYIELD_FROM_ISR();
+        }
+    };
+    // Create one-shot esp_timer
+    esp_timer_handle_t timer;
+    esp_timer_create_args_t timer_args = {
+        .callback = timerCallback,
+        .arg = (void*)thisTask,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "delay_us_timer"
+    };
+    esp_timer_create(&timer_args, &timer);
+    esp_timer_start_once(timer, us);  // Delay in microseconds
+    // Wait for notification (puts task to sleep)
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    esp_timer_delete(timer);
+}
+
+// blink function: non-blocking wrapper
+void blinkTaskFunc(void *param) {
+  BlinkCmd cmd;
+  while (true) {
+    if (xQueueReceive(blinkQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+      bool state = digitalRead(cmd.pin);
+      digitalWrite(cmd.pin, !state);
+      delay(cmd.ontime);
+      digitalWrite(cmd.pin, state);
+    } else {
+      delay_us(1000);
+    }
+  }
+}
+
+// blink function
 void blink(gpio_num_t pin, unsigned int ontime) {
-  bool lastState = digitalRead(pin);
-  digitalWrite(pin, !lastState);
-  vTaskDelay(pdMS_TO_TICKS(ontime));
-  digitalWrite(pin, lastState);
+  BlinkCmd cmd = {pin, ontime};
+  // Try to send without blocking, drop if busy
+  xQueueSend(blinkQueue, &cmd, 0);
 }
 
 // debounce key input
@@ -467,9 +522,9 @@ private:
   bool repeating = false;
   unsigned long lastChange = 0;
   unsigned long lastRepeat = 0;
-  const unsigned long debounceTime = 50;
-  const unsigned long repeatDelay = 500;
-  const unsigned long repeatInterval = 200;
+  const unsigned long debounceTime = 40;
+  const unsigned long repeatDelay = 800;
+  const unsigned long repeatInterval = 600;
 public:
   GetKeyEvent(const bool* b1, const bool* b2)
     : btn1(b1), btn2(b2) {}
@@ -525,6 +580,73 @@ void limitOffset(int8_t* off) {
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
 }
 
+// read config.json
+JsonDocument readConfig() {
+  JsonDocument doc;
+  File file = LittleFS.open(config, "r");
+  if (!file) {
+    Serial.print("LittleFS: cannot access '");
+    Serial.print(config);
+    Serial.println("': No such file or directory");
+    return doc;
+  }
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) {
+    Serial.print("Cannot deserialize the current JSON object: ");
+    Serial.println(err.c_str());
+  }
+  return doc;
+}
+
+// update config.json
+void saveConfig(const JsonDocument& doc) {
+  File file = LittleFS.open(config, "w");
+  if (!file) {
+    Serial.print("LittleFS: ");
+    Serial.print(config);
+    Serial.println(": Read-only file system");
+    return;
+  }
+  serializeJson(doc, file);
+  file.close();
+}
+
+// read table
+void getSettings(const String& mode) {
+  JsonDocument doc = readConfig();
+  offset_nv = 0;
+  offset_nh = 0;
+  for (JsonObject entry : doc.as<JsonArray>()) {
+    if (entry["mode"] == mode) {
+      String offsetName = entry["offset"];
+      int8_t value = entry["value"];
+      if (offsetName == "offset_nv") offset_nv = value;
+      else if (offsetName == "offset_nh") offset_nh = value;
+    }
+  }
+}
+
+// write table
+void updateSettings(const String& mode, const String& offset, int8_t value) {
+  JsonDocument doc = readConfig();
+  bool found = false;
+  for (JsonObject entry : doc.as<JsonArray>()) {
+    if (entry["mode"] == mode && entry["offset"] == offset) {
+      entry["value"] = value;
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    JsonObject newEntry = doc.createNestedObject();
+    newEntry["mode"] = mode;
+    newEntry["offset"] = offset;
+    newEntry["value"] = value;
+  }
+  saveConfig(doc);
+}
+
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
   canInterruptFlag0 = true;
@@ -537,11 +659,14 @@ void IRAM_ATTR onCanInterrupt1() {
 void go_to_sleep(unsigned int timeout) {
   if ( millis() - timer > timeout ) {
     timer = millis();
-    Serial.println("Can1: timeout ... no traffic");
+    Serial.println("Can: timeout ... no traffic");
     // put TJA1055 into go-to-sleep
     digitalWrite(STB, LOW);
-    delay(1);
+    delay_us(1000);
     digitalWrite(EN, LOW);
+    digitalWrite(LED_BUILTIN, LOW);
+    canDown = true;
+    delay(10);
   }
 }
 
@@ -551,11 +676,16 @@ void awake(unsigned int delayMs) {
   if ( millis() - time > delayMs ) {
     time = millis();
     timer = time;
-    // put TJA1055 into Normal Mode
-    digitalWrite(STB, HIGH);
-    digitalWrite(EN, HIGH);
+    if (canDown) {
+      // put TJA1055 into Normal Mode
+      digitalWrite(STB, HIGH);
+      digitalWrite(EN, HIGH);
+      digitalWrite(LED_BUILTIN, HIGH);
+      canDown = false;
+    }
   }
 }
+
 
 void setup() {
 
@@ -576,7 +706,7 @@ void setup() {
 
   Can0.reset();
   Can1.reset();
-  delay(1);
+  delay_us(1000);
 
   Can0.setBitrate(CAN_500KBPS, MCP_8MHZ); // Motor CAN-C High speed
   Can1.setBitrate(CAN_83K3BPS, MCP_16MHZ); // Interior CAN-B Low speed
@@ -638,7 +768,17 @@ void setup() {
     &canTask1,     // Task handle to keep track of created task
     1);            // pin task to core 1
 
+  // create a task that will be executed along the loop() function, with priority 1 and executed on core 1
   pinMode(LED_BUILTIN, OUTPUT);
+  blinkQueue = xQueueCreate(1, sizeof(BlinkCmd));
+  xTaskCreatePinnedToCore(
+    blinkTaskFunc, // Task function
+    "blinkTask",   // name of task
+    2048,          // Stack size of task
+    NULL,          // parameter of the task
+    1,             // priority of the task
+    &blinkTask,    // Task handle to keep track of created task
+    1);            // pin task to core 1
 
   // DAC offset: Vref on
   pinMode(ON, OUTPUT);
@@ -651,10 +791,17 @@ void setup() {
   ledcAttach(PWM1, freq, res);
   ledcAttach(PWM2, freq, res);
   ledcAttach(PWM3, freq, res);
-  ledcAttach(PWM4, freq, res);  
+  ledcAttach(PWM4, freq, res);
+
+  Serial.println("full source code available at -> github.com/aiecxs/w211-airmatic");
 }
 
+
 void loop() {
+
+  static uint8_t ic_stat = 0;
+  static String lastMode = mode;
+  static unsigned long timeMs = millis();
 
   // temp buttons: map bitfield bools into regular bools
   static bool button0 = 0; // MSG NAME: BUTTON_4_2 - Telefon End, OFFSET 8, LENGTH 1
@@ -675,6 +822,7 @@ void loop() {
   static GetKeyEvent keyComboFrontDn(&button2, &button7);
   static GetKeyEvent keyComboRearUp(&button3, &button6);
   static GetKeyEvent keyComboFrontUp(&button3, &button7);
+
 /*
   // DEBUG
   exportMsg(CANID_0, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 8);
@@ -686,112 +834,129 @@ void loop() {
   _debug_KOMBI_A5_print(1000);
   _debug_UBF_A1_print(1000);
 */
-/*
+
   // main loop
-  if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::EHNR) {
-    SerialPrintWarn("EHNR mode", 2, 1000);
+  if (EZS_240h.KL_15) {
+    if (FS_340h.FS_ID == 2) {
+//      SerialPrintWarn("EHNR mode", 2, 1000);
 
-    // check the KOMBI_A9 IPS Mode (Comfort/Sport)
+      // todo: check the KOMBI_A9 IPS Mode (Comfort/Sport)
+      mode = "comfort";
 
-
-  } else if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::SLF) {
-    SerialPrintWarn("AIRmatic mode", 1, 1000);
-
-    // check the AIRmatic mode (Offroad/Comfort/Sport1/Sport2)
-    // read offsets from table
-      // on table: apply offsets
-      offset_nv = 0;                   // mm front axle level custom offset
-      offset_nh = offset_nv;             // mm rear axle level custom offset
-*/
-    // check display is in phone mode
-//    if (KOMBI_A5.KI_STAT == 5) {
-      // get keyevents
-      // FRONT + HIGHER
-      button7 = KOMBI_A5.BUTTON_1_1;
-      button3 = KOMBI_A5.BUTTON_3_1;
-      keyComboFrontUp.read();
-      if (keyComboFrontUp.pressed()) {
-        offset_nv += 5; // increase
-        limitOffset(&offset_nv);
-        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
-        blink(LED_BUILTIN, 100);
+    } else if (FS_340h.FS_ID == 1) {
+      // check the AIRmatic mode (Offroad/Comfort/Sport1/Sport2)
+      if (FS_340h.ST2_LED_DL) {
+        mode = "offroad";
+      } else if (FS_340h.ST3_LEDR_DL) {
+        mode = "sport2";
+      } else if (FS_340h.ST3_LEDL_DL) {
+        mode = "sport1";
+      } else {
+        mode = "comfort";
       }
-      // FRONT + LOWER
-      button7 = KOMBI_A5.BUTTON_1_1;
-      button2 = KOMBI_A5.BUTTON_3_2;
-      keyComboFrontDn.read();
-      if (keyComboFrontDn.pressed()) {
-        offset_nv -= 5; // decrease
-        limitOffset(&offset_nv);
-        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
-        blink(LED_BUILTIN, 100);
-      }
-      // REAR + HIGHER
-      button6 = KOMBI_A5.BUTTON_1_2;
-      button3 = KOMBI_A5.BUTTON_3_1;
-      keyComboRearUp.read();
-      if (keyComboRearUp.pressed()) {
-        offset_nh += 5; // increase
-        limitOffset(&offset_nh);
-        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
-        blink(LED_BUILTIN, 100);
-      }
-      // REAR + LOWER
-      button6 = KOMBI_A5.BUTTON_1_2;
-      button2 = KOMBI_A5.BUTTON_3_2;
-      keyComboRearDn.read();
-      if (keyComboRearDn.pressed()) {
-        offset_nh -= 5; // decrease
-        limitOffset(&offset_nh);
-        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
-        blink(LED_BUILTIN, 100);
-      }
-      // on confirm: write offsets to table
-      // FRONT + SAVE
-      button7 = KOMBI_A5.BUTTON_1_1;
-      button1 = KOMBI_A5.BUTTON_4_1;
-      keyComboFrontSet.read();
-      if (keyComboFrontSet.pressed()) {
-        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
-        // on confirm: write offsets to table
-        blink(LED_BUILTIN, 100);
-      }
-      // REAR + SAVE
-      button6 = KOMBI_A5.BUTTON_1_2;
-      button1 = KOMBI_A5.BUTTON_4_1;
-      keyComboRearSet.read();
-      if (keyComboRearSet.pressed()) {
-        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
-        // on confirm: write offsets to table
-        blink(LED_BUILTIN, 100);
-      }
-      // FRONT + CANCEL
-      button7 = KOMBI_A5.BUTTON_1_1;
-      button0 = KOMBI_A5.BUTTON_4_2;
-      keyComboFrontReset.read();
-      if (keyComboFrontReset.pressed()) {
-        offset_nv = 0;
-        Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
-        // on confirm: write offsets to table
-        blink(LED_BUILTIN, 100);
-      }
-      // REAR + CANCEL
-      button6 = KOMBI_A5.BUTTON_1_2;
-      button0 = KOMBI_A5.BUTTON_4_2;
-      keyComboRearReset.read();
-      if (keyComboRearReset.pressed()) {
-        offset_nh = 0;
-        Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
-        // on confirm: write offsets to table
-        blink(LED_BUILTIN, 100);
-      }
-//    }
-/*
-  } else {
-    SerialPrintWarn("Can0: timeout ... no traffic for CAN-ID: ", CANID_1, 10000);
-    // turn off
+    }
   }
-*/
+
+  // read offsets from table
+  if (mode != lastMode) {
+    lastMode = mode;
+    // on table: apply offsets
+    getSettings(mode);
+    limitOffset(&offset_nv);
+    limitOffset(&offset_nh);
+    Serial.print("mode = "); Serial.println(mode);
+    Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+    Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+    blink(LED_BUILTIN, 100);
+  }
+
+  // check display is in phone mode
+  if (KOMBI_A5.KI_STAT) {
+    ic_stat = KOMBI_A5.KI_STAT;
+  }
+  if (ic_stat == 5) {
+    // get keyevents
+    // FRONT + HIGHER
+    button7 = KOMBI_A5.BUTTON_1_1;
+    button3 = KOMBI_A5.BUTTON_3_1;
+    keyComboFrontUp.read();
+    if (keyComboFrontUp.pressed() || keyComboFrontUp.repeated()) {
+      offset_nv += 5; // increase
+      limitOffset(&offset_nv);
+      Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+      blink(LED_BUILTIN, 100);
+    }
+    // FRONT + LOWER
+    button7 = KOMBI_A5.BUTTON_1_1;
+    button2 = KOMBI_A5.BUTTON_3_2;
+    keyComboFrontDn.read();
+    if (keyComboFrontDn.pressed() || keyComboFrontDn.repeated()) {
+      offset_nv -= 5; // decrease
+      limitOffset(&offset_nv);
+      Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
+      blink(LED_BUILTIN, 100);
+    }
+    // REAR + HIGHER
+    button6 = KOMBI_A5.BUTTON_1_2;
+    button3 = KOMBI_A5.BUTTON_3_1;
+    keyComboRearUp.read();
+    if (keyComboRearUp.pressed() || keyComboRearUp.repeated()) {
+      offset_nh += 5; // increase
+      limitOffset(&offset_nh);
+      Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+      blink(LED_BUILTIN, 100);
+    }
+    // REAR + LOWER
+    button6 = KOMBI_A5.BUTTON_1_2;
+    button2 = KOMBI_A5.BUTTON_3_2;
+    keyComboRearDn.read();
+    if (keyComboRearDn.pressed() || keyComboRearDn.repeated()) {
+      offset_nh -= 5; // decrease
+      limitOffset(&offset_nh);
+      Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
+      blink(LED_BUILTIN, 100);
+    }
+    // on confirm: write offsets to table
+    // FRONT + SAVE
+    button7 = KOMBI_A5.BUTTON_1_1;
+    button1 = KOMBI_A5.BUTTON_4_1;
+    keyComboFrontSet.read();
+    if (keyComboFrontSet.repeated()) {
+      Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle -> SET");
+      updateSettings(mode, "offset_nv", offset_nv);
+      blink(LED_BUILTIN, 100);
+    }
+    // REAR + SAVE
+    button6 = KOMBI_A5.BUTTON_1_2;
+    button1 = KOMBI_A5.BUTTON_4_1;
+    keyComboRearSet.read();
+    if (keyComboRearSet.repeated()) {
+      Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle -> SET");
+      updateSettings(mode, "offset_nh", offset_nh);
+      blink(LED_BUILTIN, 100);
+    }
+    // FRONT + CANCEL
+    button7 = KOMBI_A5.BUTTON_1_1;
+    button0 = KOMBI_A5.BUTTON_4_2;
+    keyComboFrontReset.read();
+    if (keyComboFrontReset.pressed()) {
+      offset_nv = 0;
+      Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle -> SET");
+      updateSettings(mode, "offset_nv", offset_nv);
+      blink(LED_BUILTIN, 100);
+    }
+    // REAR + CANCEL
+    button6 = KOMBI_A5.BUTTON_1_2;
+    button0 = KOMBI_A5.BUTTON_4_2;
+    keyComboRearReset.read();
+    if (keyComboRearReset.pressed()) {
+      offset_nh = 0;
+      Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle -> SET");
+      updateSettings(mode, "offset_nh", offset_nh);
+      blink(LED_BUILTIN, 100);
+    }
+  }
+
   // DAC offset voltage output
   ledcWrite(PWM1, duty + offset_nv * factor); // NVLS1
   ledcWrite(PWM2, duty - offset_nv * factor); // NVRS1 / inverted, requires negative offset
@@ -802,7 +967,10 @@ void loop() {
   go_to_sleep(10000); // 10 sec
 
   // Watchdog output pulse
-  digitalWrite(WO, !digitalRead(WO));
-//  blink(LED_BUILTIN, 100);
+  if ( millis() - timeMs > 500 ) {
+    timeMs = millis();
+    digitalWrite(WO, !digitalRead(WO));
+  }
+
   delay(10);
 }
