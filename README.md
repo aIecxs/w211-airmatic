@@ -200,3 +200,14 @@ To compile and upload the firmware to your ESP32, follow these steps:
 - **Connect MCU to PCB:**  
   Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino) for pins)
 
+---
+
+## Usage
+
+- Start engine  
+- Put Instrument Cluster in Phone mode  
+- Select AIRmatic mode from center console  
+- Use the Steering wheel buttons to adjust offset (5mm steps)  
+- Save Settings with long press  
+
+![usage](usage.png)
