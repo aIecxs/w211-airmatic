@@ -41,7 +41,7 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 
 - **Mercedes-Benz CAN Bus Research**  
   CAN bus reverse engineering by @rnd-ash.  
-  [rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter 7 In Car Entertainment.md)
+  [rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter%207%20In%20Car%20Entertainment.md)
   
 - **ArduinoJson**  
   Efficient JSON serialization library for embedded systems  
@@ -204,7 +204,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
  6. **ElegantOTA Library**  
     Install the library via **Arduino Library Manager**: search for `ElegantOTA`  
     [https://github.com/ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
-    next open file:///%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h with Editor,  
+    next open [%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h](file:///%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h) with Editor,  
     modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1
 
  7. **ESPAsyncWebServer Library**  
@@ -221,7 +221,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 
 10. **Download** and Extract the firmware  
     download and extract [w211-airmatic-master.zip](https://codeload.github.com/aIecxs/w211-airmatic/zip/refs/heads/master)  
-    create new directory file:///%UserProfile%/Documents/Arduino `AIRmatic` and copy files  
+    create new directory [%UserProfile%/Documents/Arduino](file:///%UserProfile%/Documents/Arduino) `AIRmatic` and copy files  
     - AIRmatic.ino  
     - CAN.ino  
     - w211_can_c.h  
@@ -235,7 +235,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 12. **Update the firmware**  
     connect Computer to ESP32 WiFi (see [AIRmatic.ino](AIRmatic.ino) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in file:///%Temp%/arduino/sketches)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in [%Temp%/arduino/sketches](file:///%Temp%/arduino/sketches))
 
 ---
 
