@@ -94,7 +94,7 @@ float factor = (float) duty * 2.0 / 100.0;
 
 volatile unsigned long timer = 0; // millis()
 
-volatile bool canDown = true;
+volatile bool canDown = false;
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
 
@@ -659,14 +659,14 @@ void IRAM_ATTR onCanInterrupt1() {
 void go_to_sleep(unsigned int timeout) {
   if ( millis() - timer > timeout ) {
     timer = millis();
+    canDown = true;
+    digitalWrite(LED_BUILTIN, LOW);
     Serial.println("Can: timeout ... no traffic");
+    delay(10);
     // put TJA1055 into go-to-sleep
     digitalWrite(STB, LOW);
     delay_us(1000);
     digitalWrite(EN, LOW);
-    digitalWrite(LED_BUILTIN, LOW);
-    canDown = true;
-    delay(10);
   }
 }
 
