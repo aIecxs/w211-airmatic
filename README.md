@@ -173,7 +173,7 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 The printed circuit board (PCB) layout for this project was created using the **Maker Edition of TARGET 3001!** generously provided for non-commercial DIY use.  
 With kind permission of **IBF Electronic** – www.target3001.com
 
-Download full schematic and PCB [(LM2902N.T3001)](XGerber.zip)
+Download full schematic and PCB [LM2902N.T3001](XGerber.zip)
 
 This license allows free usage exclusively for personal, non-commercial projects. Redistribution or commercial use of the PCB layout created with this software may require a separate license.
 
@@ -204,7 +204,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
  6. **ElegantOTA Library**  
     Install the library via **Arduino Library Manager**: search for `ElegantOTA`  
     [https://github.com/ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
-    next open [%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h](file:///%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h) with Editor,  
+    next open `%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h` with Editor,  
     modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1
 
  7. **ESPAsyncWebServer Library**  
@@ -221,7 +221,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 
 10. **Download** and Extract the firmware  
     download and extract [w211-airmatic-master.zip](https://codeload.github.com/aIecxs/w211-airmatic/zip/refs/heads/master)  
-    create new directory [%UserProfile%/Documents/Arduino](file:///%UserProfile%/Documents/Arduino) `AIRmatic` and copy files  
+    create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files  
     - AIRmatic.ino  
     - CAN.ino  
     - w211_can_c.h  
@@ -235,7 +235,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 12. **Update the firmware**  
     connect Computer to ESP32 WiFi (see [AIRmatic.ino](AIRmatic.ino) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in [%Temp%/arduino/sketches](file:///%Temp%/arduino/sketches))
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in `%Temp%/arduino/sketches`)
 
 ---
 
