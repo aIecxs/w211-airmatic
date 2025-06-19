@@ -25,6 +25,9 @@ Installing this modification may **invalidate your vehicle's operating license a
 This project is licensed under the MIT License.  
 See the [LICENSE](LICENSE) file for full details.
 
+This project includes third-party libraries licensed under the **LGPL-2.1** license.  
+In accordance with the LGPL-2.1 license terms, please always provide full source code with every binary released.
+
 ---
 
 **Credits**
@@ -34,12 +37,28 @@ See the [LICENSE](LICENSE) file for full details.
 
 - **MCP2515 Arduino Library**  
   Library for SPI communication with MCP2515 CAN controllers.  
-  [GitHub – autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
+  [autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
 
 - **Mercedes-Benz CAN Bus Research**  
   CAN bus reverse engineering by @rnd-ash.  
-  [GitHub – rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter%207%20In%20Car%20Entertainment.md)
+  [rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter 7 In Car Entertainment.md)
   
+- **ArduinoJson**  
+  Efficient JSON serialization library for embedded systems  
+  [bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson)  
+
+- **ElegantOTA**  
+  Library for web-based OTA firmware and filesystem updates  
+  [ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
+
+- **ESPAsyncWebServer**  
+  Asynchronous web server for ESP32  
+  [ESPAsync/ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer)  
+
+- **AsyncTCP**  
+  Asynchronous TCP library for ESP32 (dependency of ESPAsyncWebServer)  
+  [ESPAsync/AsyncTCP](https://github.com/ESP32Async/AsyncTCP)  
+
   ---
   
 **`⚠️ UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY ⚠️`**
@@ -164,23 +183,59 @@ This license allows free usage exclusively for personal, non-commercial projects
 
 To compile and upload the firmware to your ESP32, follow these steps:
 
-1. **ESP32 Board Support**  
-   Make sure you have installed the [ESP32 board package](https://randomnerdtutorials.com/esp32-pinout-reference-gpios) in Arduino IDE.
+ 1. **Arduino IDE 2.x**  
+    Install the [Arduino IDE](https://www.arduino.cc/en/software)
 
-2. **LittleFS support**  
-   For file system operations (e.g. storing presets), install the [ESP32 LittleFS tool for Arduino IDE 2.x](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs) Add-on.
-   
-3. **MCP2515 CAN Library**  
-   Install the library via **Arduino Library Manager**: search for `autowp-mcp2515`  
-   [https://github.com/autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
+ 2. **ESP32 Board Support**  
+    Make sure you have installed the [ESP32 board package](https://randomnerdtutorials.com/esp32-pinout-reference-gpios) by Espressif Systems  
+    [esp32 by Espressif Systems](https://github.com/espressif/arduino-esp32)
 
-4. **ArduinoJson Library**  
-   Install the library via **Arduino Library Manager**: search for `ArduinoJson`  
-   [https://github.com/bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+ 3. **LittleFS support**  
+    For file system operations (e.g. storing presets) install the [ESP32 LittleFS tool for Arduino IDE 2.x](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs) Add-on
 
-5. **Fake CH340 Driver (optional)**  
-   If you encounter serial driver conflicts under Windows, you may need to install fake CH340 drivers.
-   [FakeCH340DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
+ 4. **MCP2515 CAN Library**  
+    Install the library via **Arduino Library Manager**: search for `autowp-mcp2515`  
+    [https://github.com/autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515)
+
+ 5. **ArduinoJson Library**  
+    Install the library via **Arduino Library Manager**: search for `ArduinoJson`  
+    [https://github.com/bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+
+ 6. **ElegantOTA Library**  
+    Install the library via **Arduino Library Manager**: search for `ElegantOTA`  
+    [https://github.com/ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
+    next open file:///%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h with Editor,  
+    modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1
+
+ 7. **ESPAsyncWebServer Library**  
+    Install the library via **Arduino Library Manager**: search for `ESP Async WebServer` by ESP32Async  
+    [https://github.com/ESP32Async/ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer)
+
+ 8. **AsyncTCP Library**  
+    Install the library via **Arduino Library Manager**: search for `Async TCP` by ESP32Async  
+    [https://github.com/ESP32Async/AsyncTCP](https://github.com/ESP32Async/AsyncTCP)
+
+ 9. **FakeCH340 Driver (optional)**  
+    If you encounter serial driver conflicts under Windows, you may need to install FakeCH340 drivers.  
+    [FakeCH340DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
+
+10. **Download** and Extract the firmware  
+    download and extract [w211-airmatic-master.zip](https://codeload.github.com/aIecxs/w211-airmatic/zip/refs/heads/master)  
+    create new directory file:///%UserProfile%/Documents/Arduino `AIRmatic` and copy files  
+    - AIRmatic.ino  
+    - CAN.ino  
+    - w211_can_c.h  
+    - w211_can_b.h  
+
+11. **Compile** and Upload the firmware  
+    connect the ESP32 DevKit to Computer, open the Arduino Sketch, select the Board  
+    Tools -> Board -> esp32 -> ESP32 Dev Module  
+    click Upload Icon, press the BOOT button on ESP32 DevKit to enter flashing mode
+
+12. **Update the firmware**  
+    connect Computer to ESP32 WiFi (see [AIRmatic.ino](AIRmatic.ino) for credentials)  
+    visit http://192.168.4.1/update  
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in file:///%Temp%/arduino/sketches)
 
 ---
 
