@@ -227,6 +227,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
     create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files  
     - AIRmatic.ino  
     - CAN.ino  
+    - Wireless.ino  
     - w211_can_c.h  
     - w211_can_b.h  
 
@@ -236,7 +237,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
     click Upload Icon, press the BOOT button on ESP32 DevKit to enter flashing mode
 
 12. **Update the firmware**  
-    connect Computer to ESP32 WiFi (see [AIRmatic.ino](AIRmatic.ino) for credentials)  
+    connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L24) for credentials)  
     visit http://192.168.4.1/update  
     upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in `%Temp%/arduino/sketches`)
 
@@ -256,7 +257,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
   Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module.
 
 - **Connect MCU to PCB:**  
-  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino) for pins)
+  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L28) for pins)
 
 ---
 

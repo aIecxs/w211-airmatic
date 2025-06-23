@@ -3,10 +3,14 @@
  * 
  * Credits:
  * - ArduinoJson (https://github.com/bblanchon/ArduinoJson)
+ * - ElegantOTA (https://github.com/ayushsharma82/ElegantOTA)
+ * - ESPAsyncWebServer (https://github.com/ESPAsync/ESPAsyncWebServer)
+ * - AsyncTCP (https://github.com/ESPAsync/AsyncTCP)
  * - MCP2515 Arduino Library (https://github.com/autowp/arduino-mcp2515)
  * - CAN Bus reverse engineering by @rnd-ash (https://github.com/rnd-ash/mb-w211-pc)
  * 
  * Licensed under the MIT License.
+ * Third-party libraries licensed under the LGPL-2.1 License.
  */
 
 #include <SPI.h>
@@ -101,9 +105,10 @@ volatile bool canInterruptFlag1 = false;
 TaskHandle_t canTask0; // Motor CAN-C
 TaskHandle_t canTask1; // Interior CAN-B
 
+TaskHandle_t wifiTask;
+
 TaskHandle_t blinkTask;
 QueueHandle_t blinkQueue;
-
 
 // import CAN_message into bit field decoder
 void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
@@ -118,15 +123,6 @@ void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, c
 // export CAN_message into bit field decoder
 void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
 {
-/*
-  if (id) {
-    Serial.write((uint8_t)(id >> 8));
-    Serial.write((uint8_t)(id & 0xFF));
-    Serial.write((uint8_t)len);
-    Serial.write(msg, len);
-    delay(10);
-  }
-*/
   switch(id) {
     case CANID_0:
       copyMsg(&EZS_240h); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
@@ -140,325 +136,6 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
     case CANID_3:
       copyMsg(&UBF_A1); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
       break;
-  }
-}
-
-// not needed - only for debug
-void _debug_EZS_240h_print(unsigned int delayMs)
-{
-  static unsigned long time = 0;
-  if ( millis() - time > delayMs )
-  {
-    time = millis();
-//    Serial.println("byte 1");
-//    Serial.println("false");
-    Serial.println("bitfield 2");
-    Serial.print("KG_KL_AKT = "); Serial.print(EZS_240h.KG_KL_AKT, DEC); Serial.println(" Keyless Go terminal control active");
-    Serial.print("KG_ALB_OK = "); Serial.print(EZS_240h.KG_ALB_OK, DEC); Serial.println(" Keyles Go occasion requirements met");
-    Serial.print("LL_RLC = "); Serial.print(EZS_240h.LL_RLC, DEC); Serial.println(" Left Hand Drive/Right Hand Drive");
-/*
-    Serial.print("LL_RLC = ");
-    if (EZS_240h.LL_RLC == EZS_240h_t::LL_RLC_c::NDEF) {
-      Serial.print("NDEF Undefined,");
-    } else if (EZS_240h.LL_RLC == EZS_240h_t::LL_RLC_c::LL) {
-      Serial.print("LL Left hand drive,");
-    } else if (EZS_240h.LL_RLC == EZS_240h_t::LL_RLC_c::RL) {
-      Serial.print("RL Right hand drive,");
-    } else if (EZS_240h.LL_RLC == EZS_240h_t::LL_RLC_c::SNV) {
-      Serial.print("SNV Signal not available,");
-    }
-    Serial.println(" Left Hand Drive/Right Hand Drive");
-*/
-    Serial.print("RG_SCHALT = "); Serial.print(EZS_240h.RG_SCHALT, DEC); Serial.println(" reverse gear engaged (manual gearbox only)");
-    Serial.print("BS_SL = "); Serial.print(EZS_240h.BS_SL, DEC); Serial.println(" Brake switch for shift lock");
-    Serial.print("KL_15 = "); Serial.print(EZS_240h.KL_15, DEC); Serial.println(" Terminal 15");
-    Serial.print("KL_50 = "); Serial.print(EZS_240h.KL_50, DEC); Serial.println(" Terminal 50");
-//    Serial.println("byte 3");
-//    Serial.println("false");
-    Serial.println("bitfield 4");
-    Serial.print("SAM_PAS = "); Serial.print(EZS_240h.SAM_PAS, DEC); Serial.println(" SAM/x passive, x = Bb (230), V (211), F (240)");
-    Serial.print("BLS_A = "); Serial.print(EZS_240h.BLS_A, DEC); Serial.println(" SAM/x: brake light switch output EHB-ASG, x = B (230), V (211), F (240)");
-    Serial.print("BN_SOCS = "); Serial.print(EZS_240h.BN_SOCS, DEC); Serial.println(" Vehicle electrical system warning: starter battery state of charge");
-    Serial.print("ASG_SPORT_BET = "); Serial.print(EZS_240h.ASG_SPORT_BET, DEC); Serial.println(" ASG sport mode on/off actuated (ST2_LED_DL if ABC available)");
-    Serial.print("VSTAT_A = "); Serial.print(EZS_240h.VSTAT_A, DEC); Serial.println(" SAM/x: v-signal from EHB-ASG, x = B (230), V (211), F ( 240");
-    Serial.print("INF_RFE_SAM = "); Serial.print(EZS_240h.INF_RFE_SAM, DEC); Serial.println(" SAM/x: EHB-ASG in fallback level, x = B (230), V (211,164,251), F (240)");
-    Serial.print("CRASH_CNF = "); Serial.print(EZS_240h.CRASH_CNF, DEC); Serial.println(" CRASH confirm bit");
-    Serial.print("CRASH = "); Serial.print(EZS_240h.CRASH, DEC); Serial.println(" Crash signal from airbag SG");
-    Serial.println("bitfield 5");
-    Serial.print("BN_NTLF = "); Serial.print(EZS_240h.BN_NTLF, DEC); Serial.println(" Vehicle power supply emergency mode: Prio1 and Prio2 consumers off, second battery supports");
-    Serial.print("ESP_BET = "); Serial.print(EZS_240h.ESP_BET, DEC); Serial.println(" ESP on/off actuated");
-/*
-    Serial.print("ESP_BET = ");
-    if (EZS_240h.ESP_BET == EZS_240h_t::ESP_BET_c::NBET) {
-      Serial.print("NBET Not operated (rocker and push push),");
-    } else if (EZS_240h.ESP_BET == EZS_240h_t::ESP_BET_c::AUS_BET) {
-      Serial.print("AUS_BET ESP off actuated (rocker), actuated (push push),");
-    } else if (EZS_240h.ESP_BET == EZS_240h_t::ESP_BET_c::EIN_NDEF) {
-      Serial.print("EIN_NDEF ESP on actuated (rocker), not defined (push push),");
-    } else if (EZS_240h.ESP_BET == EZS_240h_t::ESP_BET_c::SNV) {
-      Serial.print("SNV No signal (rocker and push push),");
-    }
-    Serial.println(" ESP on/off actuated");
-*/
-    Serial.print("HAS_KL = "); Serial.print(EZS_240h.HAS_KL, DEC); Serial.println(" Handbrake applied (indicator lamp)");
-    Serial.print("KL_31B = "); Serial.print(EZS_240h.KL_31B, DEC); Serial.println(" Wiper out of park position");
-    Serial.print("BLI_RE = "); Serial.print(EZS_240h.BLI_RE, DEC); Serial.println(" Turn signal right");
-    Serial.print("BLI_LI = "); Serial.print(EZS_240h.BLI_LI, DEC); Serial.println(" Turn signal left");
-    Serial.println("bitfield 6");
-    Serial.print("ST2_BET = "); Serial.print(EZS_240h.ST2_BET, DEC); Serial.println(" LF/ABC 2-position switch actuated");
-/*
-    Serial.print("ST2_BET = ");
-    if (EZS_240h.ST2_BET == EZS_240h_t::ST2_BET_c::NBET) {
-      Serial.print("NBET Not operated (rocker and push push),");
-    } else if (EZS_240h.ST2_BET == EZS_240h_t::ST2_BET_c::UNBET_NDEF) {
-      Serial.print("UNBET_NDEF Bottom Actuated (Rocker), Undefined (Push Push),");
-    } else if (EZS_240h.ST2_BET == EZS_240h_t::ST2_BET_c::OBBET_BET) {
-      Serial.print("OBBET_BET Top Actuated (Rocker), Actuated (Push Push),");
-    } else if (EZS_240h.ST2_BET == EZS_240h_t::ST2_BET_c::NDEF) {
-      Serial.print("NDEF Undefined,");
-    }
-    Serial.println(" LF/ABC 2-position switch actuated");
-*/
-    Serial.print("ST3_BET = "); Serial.print(EZS_240h.ST3_BET, DEC); Serial.println(" LF/ABC 3-position switch actuated");
-/*
-    Serial.print("ST3_BET = ");
-    if (EZS_240h.ST3_BET == EZS_240h_t::ST3_BET_c::NBET) {
-      Serial.print("NBET Not operated (rocker and push push),");
-    } else if (EZS_240h.ST3_BET == EZS_240h_t::ST3_BET_c::UNBET_NDEF) {
-      Serial.print("UNBET_NDEF Bottom Actuated (Rocker), Undefined (Push Push),");
-    } else if (EZS_240h.ST3_BET == EZS_240h_t::ST3_BET_c::OBBET_BET) {
-      Serial.print("OBBET_BET Top Actuated (Rocker), Actuated (Push Push),");
-    } else if (EZS_240h.ST3_BET == EZS_240h_t::ST3_BET_c::NDEF) {
-      Serial.print("NDEF Undefined,");
-    }
-    Serial.println(" LF/ABC 3-position switch actuated");
-*/
-    Serial.print("ART_ABW_BET = "); Serial.print(EZS_240h.ART_ABW_BET, DEC); Serial.println(" ART distance warning on/off actuated");
-/*
-    Serial.print("ART_ABW_BET = ");
-    if (EZS_240h.ART_ABW_BET == EZS_240h_t::ART_ABW_BET_c::NDEF_NBET) {
-      Serial.print("NDEF_NBET not defined (rocker), not actuated (push push),");
-    } else if (EZS_240h.ART_ABW_BET == EZS_240h_t::ART_ABW_BET_c::AUS_NDEF) {
-      Serial.print("AUS_NDEF distance warning off (rocker), not defined (push push),");
-    } else if (EZS_240h.ART_ABW_BET == EZS_240h_t::ART_ABW_BET_c::EIN_BET) {
-      Serial.print("EIN_BET Distance warning on (rocker), actuated (push push),");
-    } else if (EZS_240h.ART_ABW_BET == EZS_240h_t::ART_ABW_BET_c::SNV) {
-      Serial.print("SNV No signal (rocker and push push),");
-    }
-    Serial.println(" ART distance warning on/off actuated");
-*/
-    Serial.print("ABL_EIN = "); Serial.print(EZS_240h.ABL_EIN, DEC); Serial.println(" Turn on low beam");
-    Serial.print("KL54_RM = "); Serial.print(EZS_240h.KL54_RM, DEC); Serial.println(" Terminal 54 hardware active");
-    Serial.println("byte 7");
-    Serial.print("ART_ABSTAND = "); Serial.print(EZS_240h.ART_ABSTAND, DEC); Serial.println(" distance factor");
-    Serial.println("bitfield 8");
-    Serial.print("ART_VH = "); Serial.print(EZS_240h.ART_VH, DEC); Serial.println(" ART available");
-    Serial.print("GBL_AUS = "); Serial.print(EZS_240h.GBL_AUS, DEC); Serial.println(" E-suction fan: Basic ventilation off");
-    Serial.print("FZGVERSN = "); Serial.print(EZS_240h.FZGVERSN, DEC); Serial.println(" Series-dependent vehicle version (only 220/215/230)");
-/*
-    Serial.print("FZGVERSN = ");
-    if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::START) {
-      Serial.print("START Status at market launch of the respective series,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V1) {
-      Serial.print("V1 BR 220: AJ 99/X, C215: AJ 01/1, R230: AJ 02/1,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V2) {
-      Serial.print("V2 BR 220: AJ 01/1, C215: AJ 02/X, R230: AJ 03/X,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V3) {
-      Serial.print("V3 BR 220: ÄJ 02/X, C215: ÄJ 03/X, R230: not defined,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V4) {
-      Serial.print("V4 BR 220: prohibited, C215/R230: not defined,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V5) {
-      Serial.print("V5 BR 220: prohibited, C215/R230: not defined,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V6) {
-      Serial.print("V6 BR 220: ÄJ 03/X, C215,/R230: not defined,");
-    } else if (EZS_240h.FZGVERSN == EZS_240h_t::FZGVERSN_c::V7) {
-      Serial.print("V7 BR 220/ C215,/R230: not defined,");
-    }
-    Serial.println(" Series-dependent vehicle version (only 220/215/230)");
-*/
-    Serial.print("LDC = "); Serial.print(EZS_240h.LDC, DEC); Serial.println(" country code");
-/*
-    Serial.print("LDC = ");
-    if (EZS_240h.LDC == EZS_240h_t::LDC_c::RDW) {
-      Serial.print("RDW Rest of the world,");
-    } else if (EZS_240h.LDC == EZS_240h_t::LDC_c::USA_CAN) {
-      Serial.print("USA_CAN USA/Canada,");
-    } else if (EZS_240h.LDC == EZS_240h_t::LDC_c::NDEF) {
-      Serial.print("NDEF Undefined,");
-    } else if (EZS_240h.LDC == EZS_240h_t::LDC_c::SNV) {
-      Serial.print("SNV Signal not available,");
-    }
-    Serial.println(" country code");
-*/
-  }
-}
-
-// not needed - only for debug
-void _debug_FS_340h_print(unsigned int delayMs)
-{
-  static unsigned long time = 0;
-  if ( millis() - time > delayMs )
-  {
-    time = millis();
-    Serial.println("bitfield 1");
-    Serial.print("NEDG = "); Serial.print(FS_340h.NEDG, DEC); Serial.println(" Level calibration performed");
-    Serial.print("M2 = "); Serial.print(FS_340h.M2, DEC); Serial.println(" Message 2: \"Level selection deleted\"");
-    Serial.print("M1 = "); Serial.print(FS_340h.M1, DEC); Serial.println(" Message 1: \"Vehicle lifts\", BR164/251: \"Highway->Offroad\", BR164 Offroad: \"Highway->Offroad1\"");
-    Serial.print("FM4 = "); Serial.print(FS_340h.FM4, DEC); Serial.println(" Error 4: \"Park vehicle\"");
-    Serial.print("FM3 = "); Serial.print(FS_340h.FM3, DEC); Serial.println(" Error 3: \"Visit workshop\"");
-    Serial.print("FM2 = "); Serial.print(FS_340h.FM2, DEC); Serial.println(" Error 2: \"wait a moment\" (LF)/ \"steering oil\" (only ABC)");
-    Serial.print("FM1 = "); Serial.print(FS_340h.FM1, DEC); Serial.println(" Error 1: \"Stop car too low\"");
-    Serial.println("bitfield 2");
-    Serial.print("BELAD = "); Serial.print(FS_340h.BELAD, DEC); Serial.println(" loading");
-/*
-    Serial.print("BELAD = ");
-    if (FS_340h.BELAD == FS_340h_t::BELAD_c::LEER) {
-      Serial.print("LEER Unloaded,");
-    } else if (FS_340h.BELAD == FS_340h_t::BELAD_c::HALB) {
-      Serial.print("HALB Half loaded,");
-    } else if (FS_340h.BELAD == FS_340h_t::BELAD_c::VOLL) {
-      Serial.print("VOLL Fully loaded,");
-    } else if (FS_340h.BELAD == FS_340h_t::BELAD_c::SNV) {
-      Serial.print("SNV Load not recognized,");
-    }
-    Serial.println(" loading");
-*/
-    Serial.print("ST2_LED_DL = "); Serial.print(FS_340h.ST2_LED_DL, DEC); Serial.println(" LED 2-stage switch steady light");
-    Serial.print("ST3_LEDR_DL = "); Serial.print(FS_340h.ST3_LEDR_DL, DEC); Serial.println(" Right LED 3-position switch steady light (164/251 top LED)");
-    Serial.print("ST3_LEDL_DL = "); Serial.print(FS_340h.ST3_LEDL_DL, DEC); Serial.println(" Left LED 3-position switch steady light (164/251 lower LED)");
-    Serial.println("byte 3, 4, 5, 6");
-    Serial.print("FZGN_VL = "); Serial.print(FS_340h.FZGN_VL, DEC); Serial.println(" Vehicle level, front left");
-    Serial.print("FZGN_VR = "); Serial.print(FS_340h.FZGN_VR, DEC); Serial.println(" Vehicle level, front right");
-    Serial.print("FZGN_HL = "); Serial.print(FS_340h.FZGN_HL, DEC); Serial.println(" Vehicle level, rear left");
-    Serial.print("FZGN_HR = "); Serial.print(FS_340h.FZGN_HR, DEC); Serial.println(" Vehicle level, rear right");
-//    Serial.println("byte 7");
-//    Serial.println("false");
-    Serial.println("bitfield 8");
-    Serial.print("FS_ID = "); Serial.print(FS_340h.FS_ID, DEC); Serial.println(" Suspension control identification");
-/*
-    Serial.print("FS_ID = ");
-    if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::LF) {
-      Serial.print("LF Air suspension/ LF (BR164/251 NR without ADS),");
-    } else if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::SLF) {
-      Serial.print("SLF Semi-active air suspension, SLF (BR164/251 NR+ADS),");
-    } else if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::EHNR) {
-      Serial.print("EHNR Electronic rear axle level control,");
-    } else if (FS_340h.FS_ID == FS_340h_t::FS_ID_c::ABC) {
-      Serial.print("ABC Active Body Control 1,");
-    }
-    Serial.println(" Suspension control identification");
-*/
-  }
-}
-
-// not needed - only for debug
-void _debug_KOMBI_A5_print(unsigned int delayMs)
-{
-  static unsigned long time = 0;
-  if ( millis() - time > delayMs )
-  {
-    time = millis();
-    Serial.println("bitfield 1");
-    Serial.print("KI_STAT = "); Serial.print(KOMBI_A5.KI_STAT, DEC); Serial.println(" Status Kombi"); 
-/*
-    Serial.print("KI_STAT = ");
-    if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::Neutral) {
-      Serial.print("2 Neutral,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::AUDIO) {
-      Serial.print("3 AUDIO Audio,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::NAVI) {
-      Serial.print("4 NAVI Navigation,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::TEL) {
-      Serial.print("5 TEL Telefon,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::NEU_SER) {
-      Serial.print("6 NEU_SER Neue Services,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::SPR_FNK_DLG_CLO) {
-      Serial.print("19 SPR_FNK_DLG_CLO Sprachfunk-KI Dlg geschl,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::DAT_FNK_DLG_CLO) {
-      Serial.print("20 DAT_FNK_DLG_CLO Datenfunk-KI Dlg geschl,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::SPR_FNK_DLG_OPN) {
-      Serial.print("21 SPR_FNK_DLG_OPN Sprachfunk-KI Dlg geöffnet,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::DAT_FNK_DLG_OPN) {
-      Serial.print("22 DAT_FNK_DLG_OPN Datenfunk-KI Dlg geöffnet,");
-    } else if (KOMBI_A5.KI_STAT == KOMBI_A5_t::KI_STAT_c::SNV) {
-      Serial.print("255 SNV Signal nicht vorhanden,");
-    }
-    Serial.println(" Status Kombi");
-*/
-    Serial.println("bitfield 2");
-    Serial.print("BUTTON_4_2 = "); Serial.print(KOMBI_A5.BUTTON_4_2, DEC); Serial.println(" Telefon End");
-    Serial.print("BUTTON_4_1 = "); Serial.print(KOMBI_A5.BUTTON_4_1, DEC); Serial.println(" Telefon Send");
-    Serial.print("BUTTON_3_2 = "); Serial.print(KOMBI_A5.BUTTON_3_2, DEC); Serial.println(" Taste \"-\"");
-    Serial.print("BUTTON_3_1 = "); Serial.print(KOMBI_A5.BUTTON_3_1, DEC); Serial.println(" Taste \"+\"");
-    Serial.print("BUTTON_2_2 = "); Serial.print(KOMBI_A5.BUTTON_2_2, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_2_1 = "); Serial.print(KOMBI_A5.BUTTON_2_1, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_1_2 = "); Serial.print(KOMBI_A5.BUTTON_1_2, DEC); Serial.println(" Vorheriges Display");
-    Serial.print("BUTTON_1_1 = "); Serial.print(KOMBI_A5.BUTTON_1_1, DEC); Serial.println(" Nächstes Display");
-    Serial.println("bitfield 3");
-    Serial.print("BUTTON_8_2 = "); Serial.print(KOMBI_A5.BUTTON_8_2, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_8_1 = "); Serial.print(KOMBI_A5.BUTTON_8_1, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_7_2 = "); Serial.print(KOMBI_A5.BUTTON_7_2, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_7_1 = "); Serial.print(KOMBI_A5.BUTTON_7_1, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_6_2 = "); Serial.print(KOMBI_A5.BUTTON_6_2, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_6_1 = "); Serial.print(KOMBI_A5.BUTTON_6_1, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_5_2 = "); Serial.print(KOMBI_A5.BUTTON_5_2, DEC); Serial.println(" Reserve");
-    Serial.print("BUTTON_5_1 = "); Serial.print(KOMBI_A5.BUTTON_5_1, DEC); Serial.println(" Reserve");
-    Serial.println("bitfield 4");
-    Serial.print("PTT_4_2 = "); Serial.print(KOMBI_A5.PTT_4_2, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_4_1 = "); Serial.print(KOMBI_A5.PTT_4_1, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_3_2 = "); Serial.print(KOMBI_A5.PTT_3_2, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_3_1 = "); Serial.print(KOMBI_A5.PTT_3_1, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_2_2 = "); Serial.print(KOMBI_A5.PTT_2_2, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_2_1 = "); Serial.print(KOMBI_A5.PTT_2_1, DEC); Serial.println(" Reserve");
-    Serial.print("PTT_1_2 = "); Serial.print(KOMBI_A5.PTT_1_2, DEC); Serial.println(" Linguatronic deaktivieren");
-    Serial.print("PTT_1_1 = "); Serial.print(KOMBI_A5.PTT_1_1, DEC); Serial.println(" Linguatronic aktivieren");
-  }
-}
-
-// not needed - only for debug
-void _debug_UBF_A1_print(unsigned int delayMs)
-{
-  static unsigned long time = 0;
-  if ( millis() - time > delayMs )
-  {
-    time = millis();
-    Serial.println("bitfield 1");
-    Serial.print("ART_ABW_BET = "); Serial.print(UBF_A1.ART_ABW_BET, DEC); Serial.println(" ART-Abstandswarnung ein/aus betätigt");
-    Serial.print("FU_FRSP_BET = "); Serial.print(UBF_A1.FU_FRSP_BET, DEC); Serial.println(" Taster Funkaufschaltung betätigt");
-/*
-    Serial.print("ART_ABW_BET = ");
-    if (UBF_A1.ART_ABW_BET == UBF_A1_t::ART_ABW_BET_c::NDEF_NBET) {
-      Serial.print("0 NDEF_NBET nicht definiert (Wippe), Nicht betätigt (Push Push),");
-    } else if (UBF_A1.ART_ABW_BET == UBF_A1_t::ART_ABW_BET_c::AUS_NDEF) {
-      Serial.print("1 AUS_NDEF Abstandswarnung aus (Wippe), nicht definiert (Push Push),");
-    } else if (UBF_A1.ART_ABW_BET == UBF_A1_t::ART_ABW_BET_c::EIN_BET) {
-      Serial.print("2 EIN_BET Abstandswarnung ein (Wippe), Betätigt (Push Push),");
-    } else if (UBF_A1.ART_ABW_BET == UBF_A1_t::ART_ABW_BET_c::SNV) {
-      Serial.print("3 SNV Signal nicht vorhanden (Wippe und Push Push),");
-    }
-    Serial.println(" ART-Abstandswarnung ein/aus betätigt");
-*/
-    Serial.println("byte 2");
-    Serial.print("ART_ABSTAND = "); Serial.print(UBF_A1.ART_ABSTAND, DEC); Serial.println(" Abstandsfaktor");
-    Serial.println("bitfield 3");
-    Serial.print("PTS_BET = "); Serial.print(UBF_A1.PTS_BET, DEC); Serial.println(" Taster Parktronic betätigt");
-    Serial.print("BH_FUNK_BET = "); Serial.print(UBF_A1.BH_FUNK_BET, DEC); Serial.println(" Taster Behördenfunk betätigt");
-    Serial.print("ST2_BET = "); Serial.print(UBF_A1.ST2_BET, DEC); Serial.println(" 2-stufiger Taster betätigt");
-    Serial.print("ST3_BET = "); Serial.print(UBF_A1.ST3_BET, DEC); Serial.println(" 3-stufiger Taster betätigt");
-    Serial.println("bitfield 4");
-    Serial.print("STHL_BET = "); Serial.print(UBF_A1.STHL_BET, DEC); Serial.println(" Schalter Standheizung betätigt");
-    Serial.print("LED_STH_DEF = "); Serial.print(UBF_A1.LED_STH_DEF, DEC); Serial.println(" LEDs für Standheizung defekt");
-  }
-}
-
-void SerialPrintWarn(String text, unsigned int value, unsigned int delayMs) {
-  static unsigned long time = millis();
-  if ( millis() - time > delayMs ) {
-    time = millis();
-    char buf[7];
-    sprintf(buf, "0x%04X", value);
-    Serial.print(text);
-    Serial.println(buf);
   }
 }
 
@@ -696,7 +373,7 @@ void setup() {
   |--------------|-------|---------------|--|--|--|--|--|
   ^              ^       ^               ^     ^
   Sketch    OTA update   File system   EEPROM  WiFi config (SDK) */
-  LittleFS.begin();
+  LittleFS.begin(true);
 
   // Normal Mode TJA1055
   pinMode(EN, OUTPUT);
@@ -769,6 +446,17 @@ void setup() {
     1);            // pin task to core 1
 
   // create a task that will be executed along the loop() function, with priority 1 and executed on core 1
+  wifiSetup();
+  xTaskCreatePinnedToCore(
+    wifiEvent,     // Task function
+    "WiFi Event",  // name of task
+    4096,          // Stack size of task
+    NULL,          // parameter of the task
+    1,             // priority of the task
+    &wifiTask,     // Task handle to keep track of created task
+    1);            // pin task to core 1
+
+  // create a task that will be executed along the loop() function, with priority 1 and executed on core 1
   pinMode(LED_BUILTIN, OUTPUT);
   blinkQueue = xQueueCreate(1, sizeof(BlinkCmd));
   xTaskCreatePinnedToCore(
@@ -823,22 +511,9 @@ void loop() {
   static GetKeyEvent keyComboRearUp(&button3, &button6);
   static GetKeyEvent keyComboFrontUp(&button3, &button7);
 
-/*
-  // DEBUG
-  exportMsg(CANID_0, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 8);
-  exportMsg(CANID_1, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 8);
-  exportMsg(CANID_2, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF}, 4);
-  exportMsg(CANID_3, (const uint8_t[]){0xFF, 0xFF, 0xFF, 0xFF}, 4);
-  _debug_EZS_240h_print(1000);
-  _debug_FS_340h_print(1000);
-  _debug_KOMBI_A5_print(1000);
-  _debug_UBF_A1_print(1000);
-*/
-
   // main loop
   if (EZS_240h.KL_15) {
     if (FS_340h.FS_ID == 2) {
-//      SerialPrintWarn("EHNR mode", 2, 1000);
 
       // todo: check the KOMBI_A9 IPS Mode (Comfort/Sport)
       mode = "comfort";
