@@ -239,7 +239,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
 12. **Update the firmware**  
     connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L24) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/master/AIRmatic.ino.bin) (see in `%Temp%/arduino/sketches`)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.0/AIRmatic.ino.bin) (see in `%Temp%/arduino/sketches`)
 
 ---
 
