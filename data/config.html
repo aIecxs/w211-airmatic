@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AIRmatic level custom offset</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2em;
+      background: #f0f0f0;
+    }
+
+    h1 {
+      font-size: 56px;
+      margin-bottom: 1em;
+    }
+
+    h2 {
+      font-size: 32px;
+      margin-top: 2em;
+    }
+
+    .mode-block {
+      margin-bottom: 3em;
+    }
+
+    .mode-image {
+      display: block;
+      width: 100%;
+      max-width: 808px;
+      height: auto;
+      aspect-ratio: 808 / 316;
+      border: 1px solid #ccc;
+      margin-bottom: 1em;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 808px;
+      text-align: center;
+    }
+
+    td {
+      border: 1px solid #ccc;
+      padding: 10px;
+    }
+
+    .offset-value {
+      font-size: 2.5em;
+      font-weight: bold;
+    }
+
+    tr:last-child td {
+      background-color: #f8f8f8;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>AIRmatic level custom offset</h1>
+
+  <div class="mode-block">
+    <h2>Offroad</h2>
+    <img src="offroad.png" class="mode-image" alt="Offroad">
+    <table>
+      <tr>
+        <td id="offroad_offset_nv" class="offset-value">–</td>
+        <td id="offroad_offset_nh" class="offset-value">–</td>
+      </tr>
+      <tr>
+        <td>front axle level custom offset</td>
+        <td>rear axle level custom offset</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="mode-block">
+    <h2>Comfort</h2>
+    <img src="comfort.png" class="mode-image" alt="Comfort">
+    <table>
+      <tr>
+        <td id="comfort_offset_nv" class="offset-value">–</td>
+        <td id="comfort_offset_nh" class="offset-value">–</td>
+      </tr>
+      <tr>
+        <td>front axle level custom offset</td>
+        <td>rear axle level custom offset</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="mode-block">
+    <h2>Sport</h2>
+    <img src="sport1.png" class="mode-image" alt="Sport">
+    <table>
+      <tr>
+        <td id="sport1_offset_nv" class="offset-value">–</td>
+        <td id="sport1_offset_nh" class="offset-value">–</td>
+      </tr>
+      <tr>
+        <td>front axle level custom offset</td>
+        <td>rear axle level custom offset</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="mode-block">
+    <h2>Sport II</h2>
+    <img src="sport2.png" class="mode-image" alt="Sport II">
+    <table>
+      <tr>
+        <td id="sport2_offset_nv" class="offset-value">–</td>
+        <td id="sport2_offset_nh" class="offset-value">–</td>
+      </tr>
+      <tr>
+        <td>front axle level custom offset</td>
+        <td>rear axle level custom offset</td>
+      </tr>
+    </table>
+  </div>
+
+  <script>
+    function loadOffsets() {
+      fetch("config.json")
+        .then(r => r.json())
+        .then(data => {
+          data.forEach(entry => {
+            const { mode, offset, value } = entry;
+            const id = `${mode}_${offset}`;
+            const cell = document.getElementById(id);
+            if (cell) {
+              cell.textContent = `${value} mm`;
+            }
+          });
+        })
+        .catch(err => console.error("Error reading config.json:", err));
+    }
+
+    loadOffsets(); // initial
+    setInterval(loadOffsets, 5000);
+  </script>
+</body>
+</html>

@@ -98,9 +98,13 @@ float factor = (float) duty * 2.0 / 100.0;
 
 volatile unsigned long timer = 0; // millis()
 
-volatile bool canDown = false;
+volatile bool canDown = true;
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
+
+portMUX_TYPE mux_can0 = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE mux_can1 = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE mux_awake = portMUX_INITIALIZER_UNLOCKED;
 
 TaskHandle_t canTask0; // Motor CAN-C
 TaskHandle_t canTask1; // Interior CAN-B
@@ -326,20 +330,25 @@ void updateSettings(const String& mode, const String& offset, int8_t value) {
 
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
+  portENTER_CRITICAL_ISR(&mux_can0);
   canInterruptFlag0 = true;
+  portEXIT_CRITICAL_ISR(&mux_can0);
 }
 void IRAM_ATTR onCanInterrupt1() {
+  portENTER_CRITICAL_ISR(&mux_can1);
   canInterruptFlag1 = true;
+  portEXIT_CRITICAL_ISR(&mux_can1);
 }
 
 // power down no CAN traffic
 void go_to_sleep(unsigned int timeout) {
   if ( millis() - timer > timeout ) {
+    portENTER_CRITICAL(&mux_awake);
     timer = millis();
     canDown = true;
+    portEXIT_CRITICAL(&mux_awake);
     digitalWrite(LED_BUILTIN, LOW);
     Serial.println("Can: timeout ... no traffic");
-    delay(10);
     // put TJA1055 into go-to-sleep
     digitalWrite(STB, LOW);
     delay_us(1000);
@@ -349,22 +358,31 @@ void go_to_sleep(unsigned int timeout) {
 
 // keep awake CAN traffic
 void awake(unsigned int delayMs) {
-  static unsigned long time = millis();
+  static unsigned long time = 0;
+  bool wakeup = false;
   if ( millis() - time > delayMs ) {
     time = millis();
+    portENTER_CRITICAL(&mux_awake);
     timer = time;
     if (canDown) {
+      canDown = false;
+      wakeup = true;
+    }
+    portEXIT_CRITICAL(&mux_awake);
+    if (wakeup) {
       // put TJA1055 into Normal Mode
       digitalWrite(STB, HIGH);
       digitalWrite(EN, HIGH);
       digitalWrite(LED_BUILTIN, HIGH);
-      canDown = false;
+      wakeup = false;
     }
   }
 }
 
 
 void setup() {
+
+  pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.begin(115200, SERIAL_8N1, RX0, TX0);
   SPI.begin(SCK, MISO, MOSI);
@@ -445,28 +463,25 @@ void setup() {
     &canTask1,     // Task handle to keep track of created task
     1);            // pin task to core 1
 
-  // create a task that will be executed along the loop() function, with priority 1 and executed on core 1
+  // create a task that will be executed along the loop() function, with priority 1
   wifiSetup();
-  xTaskCreatePinnedToCore(
+  xTaskCreate(
     wifiEvent,     // Task function
     "WiFi Event",  // name of task
     4096,          // Stack size of task
     NULL,          // parameter of the task
     1,             // priority of the task
-    &wifiTask,     // Task handle to keep track of created task
-    1);            // pin task to core 1
+    &wifiTask);    // Task handle to keep track of created task
 
-  // create a task that will be executed along the loop() function, with priority 1 and executed on core 1
-  pinMode(LED_BUILTIN, OUTPUT);
+  // create a task that will be executed along the loop() function, with priority 1
   blinkQueue = xQueueCreate(1, sizeof(BlinkCmd));
-  xTaskCreatePinnedToCore(
+  xTaskCreate(
     blinkTaskFunc, // Task function
     "blinkTask",   // name of task
     2048,          // Stack size of task
     NULL,          // parameter of the task
     1,             // priority of the task
-    &blinkTask,    // Task handle to keep track of created task
-    1);            // pin task to core 1
+    &blinkTask);   // Task handle to keep track of created task
 
   // DAC offset: Vref on
   pinMode(ON, OUTPUT);

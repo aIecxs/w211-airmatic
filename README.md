@@ -222,24 +222,28 @@ To compile and upload the firmware to your ESP32, follow these steps:
     If you encounter serial driver conflicts under Windows, you may need to install FakeCH340 drivers.  
     [FakeCH340DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
 
-10. **Download** and Extract the firmware  
+10. **Download and Extract the firmware**  
     download and extract [w211-airmatic-master.zip](https://codeload.github.com/aIecxs/w211-airmatic/zip/refs/heads/master)  
-    create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files  
+    create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files
+    - data/\*.\*  
     - AIRmatic.ino  
     - CAN.ino  
     - Wireless.ino  
     - w211_can_c.h  
     - w211_can_b.h  
 
-11. **Compile** and Upload the firmware  
+12. **Compile and Upload the firmware** (USB)  
     connect the ESP32 DevKit to Computer, open the Arduino Sketch, select the Board  
     Tools -> Board -> esp32 -> ESP32 Dev Module  
-    click Upload Icon, press the BOOT button on ESP32 DevKit to enter flashing mode
+    click Upload Icon, press the BOOT button on ESP32 DevKit to enter flashing mode  
+    press `[Ctrl]` + `[Shift]` + `[P]`, then type > `"Upload LittleFS to Pico/ESP8266/ESP32"`  
+    (refer to guide [**3. LittleFS support**](README.md#installation) screenshot 4.)
 
-12. **Update the firmware**  
+14. **Update the firmware** (WiFi)  
     connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L24) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.0/AIRmatic.ino.bin) (see in `%Temp%/arduino/sketches`)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.1/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
+    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.1/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
 
 ---
 
@@ -270,3 +274,10 @@ To compile and upload the firmware to your ESP32, follow these steps:
 - Save Settings with long press  
 
 ![usage](usage.png)
+
+**Wireless Usage**
+
+- connect to ESP32 WiFi  
+- visit info page -> http://192.168.4.1/config
+
+(within 5 minutes of start)

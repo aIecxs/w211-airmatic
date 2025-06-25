@@ -53,6 +53,17 @@ void onOTAEnd(bool success) {
   // <Add your own code here>
 }
 
+String getContentType(String filename) {
+  if (filename.endsWith(".html")) return "text/html";
+  if (filename.endsWith(".css")) return "text/css";
+  if (filename.endsWith(".js")) return "application/javascript";
+  if (filename.endsWith(".json")) return "application/json";
+  if (filename.endsWith(".png")) return "image/png";
+  if (filename.endsWith(".jpg")) return "image/jpeg";
+  if (filename.endsWith(".ico")) return "image/x-icon";
+  return "text/plain";
+}
+
 void wifiSetup() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
@@ -61,7 +72,27 @@ void wifiSetup() {
   Serial.println("Access Point started");
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "Hi! This is ElegantOTA Async. visit http://192.168.4.1/update");
+    request->send(200, "text/plain", 
+      "Hi! This is ElegantOTA Async. visit http://192.168.4.1/update\n"
+      "AIRmatic Settings: http://192.168.4.1/config");
+  });
+
+  server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/config.html", "text/html");
+  });
+
+  server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/config.json", "application/json");
+  });
+
+  server.onNotFound([](AsyncWebServerRequest* request) {
+    String path = request->url();
+    if (LittleFS.exists(path)) {
+      String contentType = getContentType(path);
+      request->send(LittleFS, path, contentType);
+    } else {
+      request->send(404, "text/plain", "404: File not found");
+    }
   });
 
   ElegantOTA.begin(&server);
@@ -72,6 +103,7 @@ void wifiSetup() {
   server.begin();
   Serial.println("HTTP server started");
   Serial.println("Hi! This is ElegantOTA Async. visit http://192.168.4.1/update");
+  Serial.println("AIRmatic Settings: http://192.168.4.1/config");
 }
 
 void wifiEvent(void *parameter) {
@@ -97,6 +129,6 @@ void wifiEvent(void *parameter) {
     if (wifi) {
       ElegantOTA.loop();
     }
-    delay(10);
+    delay(100);
   }
 }
