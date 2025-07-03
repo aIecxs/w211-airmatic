@@ -1,1 +1,1 @@
-[{"mode":"offroad","offset":"offset_nv","value":0},{"mode":"offroad","offset":"offset_nh","value":0},{"mode":"comfort","offset":"offset_nv","value":0},{"mode":"comfort","offset":"offset_nh","value":0},{"mode":"sport1","offset":"offset_nv","value":0},{"mode":"sport1","offset":"offset_nh","value":0},{"mode":"sport2","offset":"offset_nv","value":0},{"mode":"sport2","offset":"offset_nh","value":0}]
+{"offroad":{"offset_nv":0,"offset_nh":0},"comfort":{"offset_nv":0,"offset_nh":0},"sport1":{"offset_nv":0,"offset_nh":0},"sport2":{"offset_nv":0,"offset_nh":0}}

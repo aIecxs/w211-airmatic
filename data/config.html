@@ -123,16 +123,18 @@
   <script>
     function loadOffsets() {
       fetch("config.json")
-        .then(r => r.json())
+        .then(response => response.json())
         .then(data => {
-          data.forEach(entry => {
-            const { mode, offset, value } = entry;
-            const id = `${mode}_${offset}`;
-            const cell = document.getElementById(id);
-            if (cell) {
-              cell.textContent = `${value} mm`;
+          for (const mode in data) {
+            const offsets = data[mode];
+            for (const offset in offsets) {
+              const id = `${mode}_${offset}`;
+              const cell = document.getElementById(id);
+              if (cell) {
+                cell.textContent = `${offsets[offset]} mm`;
+              }
             }
-          });
+          }
         })
         .catch(err => console.error("Error reading config.json:", err));
     }
@@ -140,5 +142,6 @@
     loadOffsets(); // initial
     setInterval(loadOffsets, 5000);
   </script>
+
 </body>
 </html>

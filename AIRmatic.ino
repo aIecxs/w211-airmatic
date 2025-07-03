@@ -298,35 +298,26 @@ void getSettings(const String& mode) {
   JsonDocument doc = readConfig();
   offset_nv = 0;
   offset_nh = 0;
-  for (JsonObject entry : doc.as<JsonArray>()) {
-    if (entry["mode"] == mode) {
-      String offsetName = entry["offset"];
-      int8_t value = entry["value"];
-      if (offsetName == "offset_nv") offset_nv = value;
-      else if (offsetName == "offset_nh") offset_nh = value;
-    }
-  }
+  if (!doc.containsKey(mode)) return;
+  JsonObject obj = doc[mode];
+  if (obj.containsKey("offset_nv")) offset_nv = obj["offset_nv"];
+  if (obj.containsKey("offset_nh")) offset_nh = obj["offset_nh"];
 }
+
 
 // write table
 void updateSettings(const String& mode, const String& offset, int8_t value) {
   JsonDocument doc = readConfig();
-  bool found = false;
-  for (JsonObject entry : doc.as<JsonArray>()) {
-    if (entry["mode"] == mode && entry["offset"] == offset) {
-      entry["value"] = value;
-      found = true;
-      break;
-    }
+  JsonObject modeObj;
+  if (doc.containsKey(mode)) {
+    modeObj = doc[mode];
+  } else {
+    modeObj = doc.createNestedObject(mode);
   }
-  if (!found) {
-    JsonObject newEntry = doc.createNestedObject();
-    newEntry["mode"] = mode;
-    newEntry["offset"] = offset;
-    newEntry["value"] = value;
-  }
+  modeObj[offset] = value;
   saveConfig(doc);
 }
+
 
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
