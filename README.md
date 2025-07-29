@@ -208,7 +208,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
     Install the library via **Arduino Library Manager**: search for `ElegantOTA`  
     [https://github.com/ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
     next open `%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h` with Editor,  
-    modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1
+⚠️ modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1 ⚠️
 
  7. **ESPAsyncWebServer Library**  
     Install the library via **Arduino Library Manager**: search for `ESP Async WebServer` by ESP32Async  
