@@ -10,20 +10,39 @@
       background: #f0f0f0;
     }
 
-    h1 {
-      font-size: 56px;
-      margin-bottom: 1em;
+    h1 { font-size: 56px; margin-bottom: 1em; }
+    h2 { font-size: 32px; margin-top: 2em; }
+    h3 { margin-top: 2em; }
+
+    .calibration-block table {
+      width: 100%;
+      max-width: 808px;
+      margin: 1em 0;
     }
 
-    h2 {
-      font-size: 32px;
-      margin-top: 2em;
+    .calibration-block input[type="number"] {
+      font-size: 2.5em;
+      width: 3.5em;
+      text-align: center;
     }
 
-    .mode-block {
-      margin-bottom: 3em;
+    .calibration-control {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.9em;
     }
 
+    .calibration-control button {
+      font-size: 2em;
+      width: 1.7em;
+      height: 1.7em;
+      padding: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mode-block { margin-bottom: 3em; }
     .mode-image {
       display: block;
       width: 100%;
@@ -46,42 +65,63 @@
       padding: 10px;
     }
 
-    .offset-value {
-      font-size: 2.5em;
+    .calibration-block tr:last-child td {
+      background-color: #f8f8f8;
+      font-size: 1.5em;
       font-weight: bold;
     }
 
-    tr:last-child td {
+    .calibration-block tr:first-child td {
       background-color: #f8f8f8;
+      font-size: 1.5em;
       font-weight: bold;
+    }
+
+    .offset-btn {
+      font-size: 1em;
+      margin-left: 10px;
+    }
+
+    .mode-block tr:last-child td {
+      background-color: #f8f8f8;
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+
+    input[type="number"] {
+      width: 100px;
+      font-size: 2.5em;
+      text-align: center;
+    }
+
+    button {
+      font-size: 2em;
+      margin-right: 1em;
+      width: 180px;
+      height: 60px;
     }
   </style>
 </head>
+
 <body>
   <h1>AIRmatic level custom offset</h1>
-
-  <div class="mode-block">
-    <h2>Offroad</h2>
-    <img src="offroad.png" class="mode-image" alt="Offroad">
-    <table>
-      <tr>
-        <td id="offroad_offset_nv" class="offset-value">–</td>
-        <td id="offroad_offset_nh" class="offset-value">–</td>
-      </tr>
-      <tr>
-        <td>front axle level custom offset</td>
-        <td>rear axle level custom offset</td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="mode-block">
-    <h2>Comfort</h2>
+  <!-- Mode blocks -->
+  <div class="mode-block" data-mode="comfort">
+    <h2>
+      Comfort
+      <button class="offset-btn" onclick="saveOffset('comfort')" style="display:none;">Save</button>
+    </h2>
     <img src="comfort.png" class="mode-image" alt="Comfort">
     <table>
       <tr>
-        <td id="comfort_offset_nv" class="offset-value">–</td>
-        <td id="comfort_offset_nh" class="offset-value">–</td>
+        <td>
+          <input type="number" id="comfort_offset_nv" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
+        <td>
+          <input type="number" id="comfort_offset_nh" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
       </tr>
       <tr>
         <td>front axle level custom offset</td>
@@ -90,13 +130,22 @@
     </table>
   </div>
 
-  <div class="mode-block">
-    <h2>Sport</h2>
+  <div class="mode-block" data-mode="sport1">
+    <h2>
+      Sport
+      <button class="offset-btn" onclick="saveOffset('sport1')" style="display:none;">Save</button>
+    </h2>
     <img src="sport1.png" class="mode-image" alt="Sport">
     <table>
       <tr>
-        <td id="sport1_offset_nv" class="offset-value">–</td>
-        <td id="sport1_offset_nh" class="offset-value">–</td>
+        <td>
+          <input type="number" id="sport1_offset_nv" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
+        <td>
+          <input type="number" id="sport1_offset_nh" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
       </tr>
       <tr>
         <td>front axle level custom offset</td>
@@ -105,13 +154,22 @@
     </table>
   </div>
 
-  <div class="mode-block">
-    <h2>Sport II</h2>
+  <div class="mode-block" data-mode="sport2">
+    <h2>
+      Sport II
+      <button class="offset-btn" onclick="saveOffset('sport2')" style="display:none;">Save</button>
+    </h2>
     <img src="sport2.png" class="mode-image" alt="Sport II">
     <table>
       <tr>
-        <td id="sport2_offset_nv" class="offset-value">–</td>
-        <td id="sport2_offset_nh" class="offset-value">–</td>
+        <td>
+          <input type="number" id="sport2_offset_nv" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
+        <td>
+          <input type="number" id="sport2_offset_nh" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
       </tr>
       <tr>
         <td>front axle level custom offset</td>
@@ -120,28 +178,227 @@
     </table>
   </div>
 
-  <script>
-    function loadOffsets() {
-      fetch("config.json")
-        .then(response => response.json())
-        .then(data => {
-          for (const mode in data) {
-            const offsets = data[mode];
-            for (const offset in offsets) {
-              const id = `${mode}_${offset}`;
-              const cell = document.getElementById(id);
-              if (cell) {
-                cell.textContent = `${offsets[offset]} mm`;
-              }
-            }
-          }
-        })
-        .catch(err => console.error("Error reading config.json:", err));
-    }
+  <div class="mode-block" data-mode="offroad">
+    <h2>
+      Offroad
+      <button class="offset-btn" onclick="saveOffset('offroad')" style="display:none;">Save</button>
+    </h2>
+    <img src="offroad.png" class="mode-image" alt="Offroad">
+    <table>
+      <tr>
+        <td>
+          <input type="number" id="offroad_offset_nv" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
+        <td>
+          <input type="number" id="offroad_offset_nh" disabled>
+          <span style="font-size: 2em;">mm</span>
+        </td>
+      </tr>
+      <tr>
+        <td>front axle level custom offset</td>
+        <td>rear axle level custom offset</td>
+      </tr>
+    </table>
+  </div>
 
-    loadOffsets(); // initial
-    setInterval(loadOffsets, 5000);
-  </script>
+  <!-- Calibration block -->
+  <div class="calibration-block">
+    <h2>PWM Voltage Calibration (do not change!)</h2>
+    <button onclick="readCalibration()">Reset</button>
+    <button class="edit-btn" onclick="enableCalibration()">Edit</button>
+    <button class="save-btn" onclick="saveCalibration()" style="display:none;">Save</button>
+    <span id="warn-ico" style="display:none; font-size: 2.4em;">&#x26A0;&#xFE0F;</span>
+    <table>
+      <tr>
+        <td>(VR) front right</td>
+        <td>(HR) rear right</td>
+      </tr>
+      <tr>
+        <td>
+          <div class="calibration-control">
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', -1)" style="display:none;">−</button>
+            <input type="number" id="calibration_calib_vr" disabled>
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', +1)" style="display:none;">+</button>
+          </div>
+        </td>
+        <td>
+          <div class="calibration-control">
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', -1)" style="display:none;">−</button>
+            <input type="number" id="calibration_calib_hr" disabled>
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', +1)" style="display:none;">+</button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div class="calibration-control">
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', -1)" style="display:none;">−</button>
+            <input type="number" id="calibration_calib_vl" disabled>
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', +1)" style="display:none;">+</button>
+          </div>
+        </td>
+        <td>
+          <div class="calibration-control">
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', -1)" style="display:none;">−</button>
+            <input type="number" id="calibration_calib_hl" disabled>
+            <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', +1)" style="display:none;">+</button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>(VL) front left</td>
+        <td>(HL) rear left</td>
+      </tr>
+    </table>
+  </div>
+
+<script>
+  let cachedJson = {};
+  let lastFocused = null;
+  let currentMode = null;
+
+  document.addEventListener('focusin', (event) => {
+    if (event.target.tagName === 'INPUT') {
+      lastFocused = event.target.id;
+    }
+  });
+
+  document.addEventListener('focusout', (event) => {
+    if (event.target.tagName === 'INPUT') {
+      handleFieldUpdate(event.target);
+      lastFocused = null;
+    }
+  });
+  
+  function incrementValue(id, delta) {
+    const field = document.getElementById(id);
+    if (!field) return;
+    let val = parseInt(field.value);
+    if (isNaN(val)) val = 0;
+    val += delta;
+    field.value = val;
+    handleFieldUpdate(field);
+  }
+
+  function handleFieldUpdate(activeField) {
+    const id = activeField.id;
+    let val = parseInt(activeField.value);
+    if (isNaN(val)) val = 0;
+    if (id.startsWith("calibration_")) {
+      const key = id.replace("calibration_", "");
+      if (!cachedJson.calibration) cachedJson.calibration = {};
+      const oldVal = cachedJson.calibration[key];
+      if (oldVal !== val) {
+        cachedJson.calibration[key] = val;
+        sendUpdatedJson();
+      }
+    } else {
+      const parts = id.split("_");
+      const mode = parts.shift();
+      const key = parts.join("_");
+      if (!cachedJson[mode]) cachedJson[mode] = {};
+      const oldVal = cachedJson[mode][key];
+      if (oldVal !== val) {
+        cachedJson[mode][key] = val;
+        sendUpdatedJson();
+      }
+    }
+  }
+
+  function enableButton(mode, enable) {
+    const btn = document.querySelector(`.mode-block[data-mode="${mode}"] .offset-btn`);
+    if (btn) {
+      btn.style.display = enable ? 'inline-block' : 'none';
+    }
+  }
+
+  function enableCalibration() {
+    document.querySelectorAll('.calibration-block input').forEach(el => el.disabled = false);
+    document.querySelector('.edit-btn').style.display = "none";
+    document.querySelector('.save-btn').style.display = "inline-block";
+    document.getElementById('warn-ico').style.display = "inline";
+    document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "inline-block");
+  }
+
+  function readCalibration() {
+    document.querySelectorAll('.calibration-block input').forEach(el => el.disabled = true);
+    document.querySelector('.edit-btn').style.display = "inline-block";
+    document.querySelector('.save-btn').style.display = "none";
+    document.getElementById('warn-ico').style.display = "none";
+    document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "none");
+    fetch("/config?update=1", { method: "POST" })
+      .then(() => setTimeout(fetchJson, 200));
+  }
+
+  function saveCalibration() {
+    document.querySelectorAll('.calibration-block input').forEach(el => el.disabled = true);
+    document.querySelector('.edit-btn').style.display = "inline-block";
+    document.querySelector('.save-btn').style.display = "none";
+    document.getElementById('warn-ico').style.display = "none";
+    document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "none");
+    fetch("/config?update=2", { method: "POST" })
+  }
+
+  function sendUpdatedJson() {
+    fetch("/config?update=3", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cachedJson)
+    });
+  }
+
+  function saveOffset(mode) {
+    fetch("/config?update=4", { method: "POST" })
+  }
+
+  function fetchJson() {
+    fetch("/config.json")
+      .then(response => response.json())
+      .then(data => {
+        cachedJson = data;
+        if ("current_mode" in data) {
+          currentMode = data.current_mode;
+        } else {
+          currentMode = null;
+        }
+        updateUI();
+      });
+  }
+
+  function updateUI() {
+    const c = cachedJson["calibration"] || {};
+    ["calib_vl", "calib_vr", "calib_hl", "calib_hr"].forEach(key => {
+      const id = "calibration_" + key;
+      if (document.activeElement.id !== id) {
+        const el = document.getElementById(id);
+        if (el && key in c) el.value = c[key];
+      }
+    });
+    const modes = ["offroad", "comfort", "sport1", "sport2"];
+    modes.forEach(mode => {
+      const data = cachedJson[mode];
+      if (!data) return;
+      ["offset_nv", "offset_nh"].forEach(key => {
+        const id = `${mode}_${key}`;
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (mode === currentMode) {
+		  enableButton(mode, true);
+          el.disabled = false;
+          if (document.activeElement.id !== id && key in data) el.value = data[key];
+        } else {
+		  enableButton(mode, false);
+          el.disabled = true;
+          if (key in data) el.value = data[key];
+        }
+      });
+    });
+  }
+
+  fetchJson();
+  setInterval(fetchJson, 2000);
+</script>
 
 </body>
 </html>

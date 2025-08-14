@@ -89,7 +89,12 @@ MCP2515 Can1(CS1); // CS -> GPIO15
 const int freq = 4000; // 4 kHz
 const uint8_t res = 8; // resolution 255
 uint8_t duty = 115; // default 45% / adjust here if reference zero position for offset drifts away
+int8_t calib_vl = 0; // NVLS1 calibration
+int8_t calib_vr = 0; // NVRS1 calibration
+int8_t calib_hr = 0; // NHRS1 calibration
+int8_t calib_hl = 0; // NHLS1 calibration
 
+String configJson;
 String mode = "default";
 const char* config = "/config.json";
 int8_t offset_nv = 0; // mm front axle level custom offset
@@ -269,9 +274,12 @@ JsonDocument readConfig() {
     Serial.print("LittleFS: cannot access '");
     Serial.print(config);
     Serial.println("': No such file or directory");
+    configJson = "{}";
     return doc;
   }
   DeserializationError err = deserializeJson(doc, file);
+  file.seek(0);
+  configJson = file.readString();
   file.close();
   if (err) {
     Serial.print("Cannot deserialize the current JSON object: ");
@@ -293,6 +301,32 @@ void saveConfig(const JsonDocument& doc) {
   file.close();
 }
 
+void getCalibration() {
+  JsonDocument doc = readConfig();
+  calib_vl = 0;
+  calib_vr = 0;
+  calib_hl = 0;
+  calib_hr = 0;
+  if (!doc.containsKey("calibration")) return;
+  JsonObject obj = doc["calibration"];
+  if (obj.containsKey("calib_vl")) calib_vl = obj["calib_vl"];
+  if (obj.containsKey("calib_vr")) calib_vr = obj["calib_vr"];
+  if (obj.containsKey("calib_hl")) calib_hl = obj["calib_hl"];
+  if (obj.containsKey("calib_hr")) calib_hr = obj["calib_hr"];
+}
+
+void updateCalibration(const String& key, int8_t value) {
+  JsonDocument doc = readConfig();
+  JsonObject calibObj;
+  if (doc.containsKey("calibration")) {
+    calibObj = doc["calibration"];
+  } else {
+    calibObj = doc.createNestedObject("calibration");
+  }
+  calibObj[key] = value;
+  saveConfig(doc);
+}
+
 // read table
 void getSettings(const String& mode) {
   JsonDocument doc = readConfig();
@@ -303,7 +337,6 @@ void getSettings(const String& mode) {
   if (obj.containsKey("offset_nv")) offset_nv = obj["offset_nv"];
   if (obj.containsKey("offset_nh")) offset_nh = obj["offset_nh"];
 }
-
 
 // write table
 void updateSettings(const String& mode, const String& offset, int8_t value) {
@@ -317,7 +350,6 @@ void updateSettings(const String& mode, const String& offset, int8_t value) {
   modeObj[offset] = value;
   saveConfig(doc);
 }
-
 
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
@@ -453,6 +485,8 @@ void setup() {
     2,             // priority of the task
     &canTask1,     // Task handle to keep track of created task
     1);            // pin task to core 1
+
+  (void) readConfig();
 
   // create a task that will be executed along the loop() function, with priority 1
   wifiSetup();
@@ -639,10 +673,10 @@ void loop() {
   }
 
   // DAC offset voltage output
-  ledcWrite(PWM1, duty + offset_nv * factor); // NVLS1
-  ledcWrite(PWM2, duty - offset_nv * factor); // NVRS1 / inverted, requires negative offset
-  ledcWrite(PWM3, duty + offset_nh * factor); // NHRS1
-//  ledcWrite(PWM4, duty + offset_nh * factor); // NHLS1 / not available for 211/219
+  ledcWrite(PWM1, duty + calib_vl + offset_nv * factor); // NVLS1
+  ledcWrite(PWM2, duty + calib_vr - offset_nv * factor); // NVRS1 / inverted, requires negative offset
+  ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
+//  ledcWrite(PWM4, duty + calib_hl + offset_nh * factor); // NHLS1 / not available for 211/219
 
   // put TJA1055 into go-to-sleep / TJA1055 does the rest and will switch off TLE4271 automatically
   go_to_sleep(10000); // 10 sec

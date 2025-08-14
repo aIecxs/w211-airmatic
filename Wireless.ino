@@ -22,12 +22,14 @@
 #include <ElegantOTA.h>
 
 // BEWARE: Important! Change WiFi password here!
-const char* ssid = "ESP32";
+const char* ssid = "Mercedes-Benz";
 const char* password = "12345678";
 
 AsyncWebServer server(80);
 
 unsigned long ota_progress_millis = 0;
+
+uint8_t update = 1;
 
 void onOTAStart() {
   // Log when OTA has started
@@ -64,6 +66,76 @@ String getContentType(String filename) {
   return "text/plain";
 }
 
+void updateJson() {
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, configJson);
+  if (err) {
+    Serial.print("Cannot deserialize the current JSON object: ");
+    Serial.println(err.c_str());
+    doc.to<JsonObject>();
+  }
+  JsonObject calibration = doc.containsKey("calibration") ? doc["calibration"].as<JsonObject>() : doc.createNestedObject("calibration");
+  calibration["calib_vl"] = calib_vl;
+  calibration["calib_vr"] = calib_vr;
+  calibration["calib_hl"] = calib_hl;
+  calibration["calib_hr"] = calib_hr;
+  JsonObject modeObj = doc.containsKey(mode) ? doc[mode].as<JsonObject>() : doc.createNestedObject(mode);
+  modeObj["offset_nv"] = offset_nv;
+  modeObj["offset_nh"] = offset_nh;
+  doc["current_mode"] = mode;
+  serializeJson(doc, configJson);
+}
+
+void readJson() {
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, configJson);
+  if (err) {
+    Serial.print("Cannot deserialize the current JSON object: ");
+    Serial.println(err.c_str());
+    return;
+  }
+  if (doc.containsKey("calibration")) {
+    JsonObject c = doc["calibration"];
+    if (c.containsKey("calib_vl")) calib_vl = c["calib_vl"];
+    if (c.containsKey("calib_vr")) calib_vr = c["calib_vr"];
+    if (c.containsKey("calib_hl")) calib_hl = c["calib_hl"];
+    if (c.containsKey("calib_hr")) calib_hr = c["calib_hr"];
+  }
+  if (doc.containsKey(mode)) {
+    JsonObject m = doc[mode];
+    if (m.containsKey("offset_nv")) offset_nv = m["offset_nv"];
+    if (m.containsKey("offset_nh")) offset_nh = m["offset_nh"];
+  }
+  limitOffset(&offset_nv);
+  limitOffset(&offset_nh);
+}
+
+void webConfig() {
+  if (update == 1) {
+    getCalibration();
+    updateJson();
+    update = 0;
+  } 
+  else if (update == 2) {
+    readJson();
+    updateCalibration("calib_vl", calib_vl);
+    updateCalibration("calib_vr", calib_vr);
+    updateCalibration("calib_hl", calib_hl);
+    updateCalibration("calib_hr", calib_hr);
+    update = 0;
+  }
+  else if (update == 3) {
+    readJson();
+    update = 0;
+  }
+  else if (update == 4) {
+    readJson();
+    updateSettings(mode, "offset_nv", offset_nv);
+    updateSettings(mode, "offset_nh", offset_nh);
+    update = 0;
+  }
+}
+
 void wifiSetup() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
@@ -73,7 +145,7 @@ void wifiSetup() {
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", 
-      "Hi! This is ElegantOTA Async. visit http://192.168.4.1/update\n"
+      "Hi! This is ElegantOTA. visit: http://192.168.4.1/update\n"
       "AIRmatic Settings: http://192.168.4.1/config");
   });
 
@@ -81,8 +153,31 @@ void wifiSetup() {
     request->send(LittleFS, "/config.html", "text/html");
   });
 
+  server.on(
+    "/config",
+    HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+      if (request->hasParam("update", false)) {
+        String updateParam = request->getParam("update", false)->value();
+        update = updateParam.toInt();
+      }
+      request->send(200, "text/plain", "OK");
+    },
+    NULL,
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      if (len > 0) {
+        configJson = String((char*)data, len);
+      }
+      if (request->hasParam("update", false)) {
+        String updateParam = request->getParam("update", false)->value();
+        update = updateParam.toInt();
+      }
+    }
+  );
+
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(LittleFS, "/config.json", "application/json");
+    updateJson();
+    request->send(200, "application/json", configJson);
   });
 
   server.onNotFound([](AsyncWebServerRequest* request) {
@@ -102,7 +197,7 @@ void wifiSetup() {
 
   server.begin();
   Serial.println("HTTP server started");
-  Serial.println("Hi! This is ElegantOTA Async. visit http://192.168.4.1/update");
+  Serial.println("Hi! This is ElegantOTA. visit: http://192.168.4.1/update");
   Serial.println("AIRmatic Settings: http://192.168.4.1/config");
 }
 
@@ -128,6 +223,7 @@ void wifiEvent(void *parameter) {
     }
     if (wifi) {
       ElegantOTA.loop();
+      webConfig();
     }
     delay(100);
   }

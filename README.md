@@ -66,6 +66,8 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 
   **Offset Voltage**
 
+  (Duty can adjusted from WebUI calibration)
+
 | PWM  | Res | Duty | mm  | Offset Voltage (V) |
 |------|-----|------|-----|--------------------|
 | 0%   | 255 | 0    | -50 | -1.0               |
@@ -227,8 +229,8 @@ To compile and upload the firmware to your ESP32, follow these steps:
     create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files
     - data/\*.\*  
     - AIRmatic.ino  
-    - CAN.ino  
     - Wireless.ino  
+    - CAN.ino  
     - w211_can_c.h  
     - w211_can_b.h  
 
@@ -237,17 +239,20 @@ To compile and upload the firmware to your ESP32, follow these steps:
     Tools -> Board -> esp32 -> ESP32 Dev Module  
     click Upload Icon, press the BOOT button on ESP32 DevKit to enter flashing mode  
     press `[Ctrl]` + `[Shift]` + `[P]`, then type > `"Upload LittleFS to Pico/ESP8266/ESP32"`  
-    (refer to guide [**3. LittleFS support**](README.md#installation) screenshot 4.)
+    (refer to guide [3. LittleFS support](README.md#installation) screenshot 4.)
 
 14. **Update the firmware** (WiFi)  
     connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L24) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.1/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
-    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.1/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.2/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
+    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.0.2/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
 
 ---
 
 ## Wiring
+
+- **Location of air suspension ECU and CAN connector X30/6**  
+  For 211/219 the control unit is located under right side passenger footwell. (refer to [Pinout.pdf](Pinout.pdf) for details)
 
 - **Power Supply:**  
   Use a DC-DC buck converter (12V -> 5V) to supply power to the microcontroller (MCU).
@@ -255,10 +260,10 @@ To compile and upload the firmware to your ESP32, follow these steps:
 - **Connect PCB to control unit:**  
   Wire battery voltage, ground, and the level sensor signal lines between the PCB and the vehicle's air suspension ECU.
   For a visual guide on wiring, refer to the following video:  
-  [Wiring Overview Video](https://www.youtube.com/watch?v=JCMEg7JYTig)
+  [Wiring Overview Example](https://www.youtube.com/watch?v=JCMEg7JYTig) (© RENNtech Inc.)
 
 - **Connect MCU to CAN bus module:**  
-  Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module.
+  Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module. For AIRmatic mode selection from center console (CAN C) is splitted from ECU. For Steering wheel buttons (CAN B) second CAN bus module with 16 MHz Crystal Oscillator is required.
 
 - **Connect MCU to PCB:**  
   Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L28) for pins)
@@ -281,3 +286,5 @@ To compile and upload the firmware to your ESP32, follow these steps:
 - visit info page -> http://192.168.4.1/config
 
 (within 5 minutes of start)
+
+![webUI](wireless.jpg)
