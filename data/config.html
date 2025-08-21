@@ -12,46 +12,6 @@
 
     h1 { font-size: 56px; margin-bottom: 1em; }
     h2 { font-size: 32px; margin-top: 2em; }
-    h3 { margin-top: 2em; }
-
-    .calibration-block table {
-      width: 100%;
-      max-width: 808px;
-      margin: 1em 0;
-    }
-
-    .calibration-block input[type="number"] {
-      font-size: 2.5em;
-      width: 3.5em;
-      text-align: center;
-    }
-
-    .calibration-control {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 1.9em;
-    }
-
-    .calibration-control button {
-      font-size: 2em;
-      width: 1.7em;
-      height: 1.7em;
-      padding: 0;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .mode-block { margin-bottom: 3em; }
-    .mode-image {
-      display: block;
-      width: 100%;
-      max-width: 808px;
-      height: auto;
-      aspect-ratio: 808 / 316;
-      border: 1px solid #ccc;
-      margin-bottom: 1em;
-    }
 
     table {
       border-collapse: collapse;
@@ -65,16 +25,66 @@
       padding: 10px;
     }
 
+    .level-table td {
+      font-size: 2em;
+    }
+
+    .offset-table .input-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1em;
+    }
+
+    .offset-table input[type="number"] {
+      width: 100px;
+      font-size: 2.5em;
+      text-align: center;
+    }
+
+    .offset-table .unit {
+      font-size: 2.5em;
+    }
+
+    .calibration-block table {
+      width: 100%;
+      max-width: 808px;
+      margin: 1em 0;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .calibration-block td {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+
+    .calibration-block tr:first-child td,
     .calibration-block tr:last-child td {
       background-color: #f8f8f8;
       font-size: 1.5em;
       font-weight: bold;
     }
 
-    .calibration-block tr:first-child td {
-      background-color: #f8f8f8;
-      font-size: 1.5em;
-      font-weight: bold;
+    .calibration-block input[type="number"] {
+      font-size: 2.5em;
+      width: 2.5em;
+      text-align: center;
+    }
+
+    .calibration-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      width: 100%;
+    }
+
+    button {
+      font-size: 2em;
+      margin-right: 0.3em;
+      margin-left: 0.3em;
+      width: 180px;
+      height: 60px;
     }
 
     .offset-btn {
@@ -82,23 +92,62 @@
       margin-left: 10px;
     }
 
-    .mode-block tr:last-child td {
-      background-color: #f8f8f8;
+    .calibration-control button {
+      font-size: 2em;
+      width: 1.7em;
+      height: 1.7em;
+      padding: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mode-block {
+      margin-bottom: 3em;
+    }
+
+    .mode-image {
+      display: block;
+      width: 100%;
+      max-width: 808px;
+      aspect-ratio: 808 / 316;
+      border: 1px solid #ccc;
+      margin-bottom: 1em;
+    }
+
+    .cell-with-slider {
+      position: relative;
+      height: 50px;
+    }
+
+    .cell-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .cell-wrapper input[type=range].reversed {
+      transform: translate(-50%, -50%) scaleX(-1);
+    }
+
+    .cell-wrapper input[type=range] {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 90%;
+      opacity: 0.5;
+      pointer-events:auto;
+    }
+
+    .cell-wrapper .label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 90%;
+      transform: translate(-50%, -50%);
+      text-align: center;
       font-size: 1.5em;
       font-weight: bold;
-    }
-
-    input[type="number"] {
-      width: 100px;
-      font-size: 2.5em;
-      text-align: center;
-    }
-
-    button {
-      font-size: 2em;
-      margin-right: 1em;
-      width: 180px;
-      height: 60px;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -111,21 +160,53 @@
       Comfort
       <button class="offset-btn" onclick="saveOffset('comfort')" style="display:none;">Save</button>
     </h2>
-    <img src="comfort.png" class="mode-image" alt="Comfort">
-    <table>
+    <table class="level-table" style="display:none;">
       <tr>
-        <td>
-          <input type="number" id="comfort_offset_nv" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td>(VR) front right</td>
+        <td>(HR) rear right</td>
+      </tr>
+      <tr>
+        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td>(VL) front left</td>
+        <td>(HL) rear left</td>
+      </tr>
+    </table>
+    <img src="comfort.png" class="mode-image" alt="Comfort">
+    <table class="offset-table">
+      <tr>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="comfort_offset_nv" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
-        <td>
-          <input type="number" id="comfort_offset_nh" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="comfort_offset_nh" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
       </tr>
       <tr>
-        <td>front axle level custom offset</td>
-        <td>rear axle level custom offset</td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_comfort_offset_nv" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">front axle level custom offset</div>
+          </div>
+        </td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_comfort_offset_nh" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">rear axle level custom offset</div>
+          </div>
+        </td>
       </tr>
     </table>
   </div>
@@ -135,21 +216,53 @@
       Sport
       <button class="offset-btn" onclick="saveOffset('sport1')" style="display:none;">Save</button>
     </h2>
-    <img src="sport1.png" class="mode-image" alt="Sport">
-    <table>
+    <table class="level-table" style="display:none;">
       <tr>
-        <td>
-          <input type="number" id="sport1_offset_nv" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td>(VR) front right</td>
+        <td>(HR) rear right</td>
+      </tr>
+      <tr>
+        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td>(VL) front left</td>
+        <td>(HL) rear left</td>
+      </tr>
+    </table>
+    <img src="sport1.png" class="mode-image" alt="Sport">
+    <table class="offset-table">
+      <tr>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="sport1_offset_nv" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
-        <td>
-          <input type="number" id="sport1_offset_nh" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="sport1_offset_nh" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
       </tr>
       <tr>
-        <td>front axle level custom offset</td>
-        <td>rear axle level custom offset</td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_sport1_offset_nv" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">front axle level custom offset</div>
+          </div>
+        </td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_sport1_offset_nh" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">rear axle level custom offset</div>
+          </div>
+        </td>
       </tr>
     </table>
   </div>
@@ -159,21 +272,53 @@
       Sport II
       <button class="offset-btn" onclick="saveOffset('sport2')" style="display:none;">Save</button>
     </h2>
-    <img src="sport2.png" class="mode-image" alt="Sport II">
-    <table>
+    <table class="level-table" style="display:none;">
       <tr>
-        <td>
-          <input type="number" id="sport2_offset_nv" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td>(VR) front right</td>
+        <td>(HR) rear right</td>
+      </tr>
+      <tr>
+        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td>(VL) front left</td>
+        <td>(HL) rear left</td>
+      </tr>
+    </table>
+    <img src="sport2.png" class="mode-image" alt="Sport II">
+    <table class="offset-table">
+      <tr>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="sport2_offset_nv" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
-        <td>
-          <input type="number" id="sport2_offset_nh" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="sport2_offset_nh" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
       </tr>
       <tr>
-        <td>front axle level custom offset</td>
-        <td>rear axle level custom offset</td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_sport2_offset_nv" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">front axle level custom offset</div>
+          </div>
+        </td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_sport2_offset_nh" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">rear axle level custom offset</div>
+          </div>
+        </td>
       </tr>
     </table>
   </div>
@@ -183,21 +328,53 @@
       Offroad
       <button class="offset-btn" onclick="saveOffset('offroad')" style="display:none;">Save</button>
     </h2>
-    <img src="offroad.png" class="mode-image" alt="Offroad">
-    <table>
+    <table class="level-table" style="display:none;">
       <tr>
-        <td>
-          <input type="number" id="offroad_offset_nv" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td>(VR) front right</td>
+        <td>(HR) rear right</td>
+      </tr>
+      <tr>
+        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+      </tr>
+      <tr>
+        <td>(VL) front left</td>
+        <td>(HL) rear left</td>
+      </tr>
+    </table>
+    <img src="offroad.png" class="mode-image" alt="Offroad">
+    <table class="offset-table">
+      <tr>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="offroad_offset_nv" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
-        <td>
-          <input type="number" id="offroad_offset_nh" disabled>
-          <span style="font-size: 2em;">mm</span>
+        <td class="input-cell">
+          <div class="input-wrapper">
+            <input type="number" id="offroad_offset_nh" disabled>
+            <span class="unit">mm</span>
+          </div>
         </td>
       </tr>
       <tr>
-        <td>front axle level custom offset</td>
-        <td>rear axle level custom offset</td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_offroad_offset_nv" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">front axle level custom offset</div>
+          </div>
+        </td>
+        <td class="cell-with-slider">
+          <div class="cell-wrapper">
+            <input class="reversed" type="range" id="slider_offroad_offset_nh" min="-50" max="50" step="1" value="0" style="display:none;">
+            <div class="label">rear axle level custom offset</div>
+          </div>
+        </td>
       </tr>
     </table>
   </div>
@@ -217,32 +394,40 @@
       <tr>
         <td>
           <div class="calibration-control">
+            <span class="duty" id="duty_vr" style="display:inline-block;">—</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_vr" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', +1)" style="display:none;">+</button>
+            <span class="duty" id="pct_vr" style="display:inline-block;">—</span>
           </div>
         </td>
         <td>
           <div class="calibration-control">
+            <span class="duty" id="duty_hr" style="display:inline-block;">—</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_hr" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', +1)" style="display:none;">+</button>
+            <span class="duty" id="pct_hr" style="display:inline-block;">—</span>
           </div>
         </td>
       </tr>
       <tr>
         <td>
           <div class="calibration-control">
+            <span class="duty" id="duty_vl" style="display:inline-block;">—</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_vl" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', +1)" style="display:none;">+</button>
+            <span class="duty" id="pct_vl" style="display:inline-block;">—</span>
           </div>
         </td>
         <td>
           <div class="calibration-control">
+            <span class="duty" id="duty_hl" style="display:inline-block;">—</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_hl" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', +1)" style="display:none;">+</button>
+            <span class="duty" id="pct_hl" style="display:inline-block;">—</span>
           </div>
         </td>
       </tr>
@@ -288,6 +473,12 @@
     if (id.startsWith("calibration_")) {
       const key = id.replace("calibration_", "");
       if (!cachedJson.calibration) cachedJson.calibration = {};
+      if ("duty" in cachedJson.calibration) {
+        const duty = cachedJson.calibration.duty;
+        if (val < -duty) val = -duty;
+        if (val > duty) val = duty;
+        activeField.value = val;
+      }
       const oldVal = cachedJson.calibration[key];
       if (oldVal !== val) {
         cachedJson.calibration[key] = val;
@@ -306,10 +497,49 @@
     }
   }
 
+  function initSliders() {
+    const modes = ["offroad", "comfort", "sport1", "sport2"];
+    modes.forEach(mode => {
+      ["offset_nv", "offset_nh"].forEach(key => {
+        const id = `${mode}_${key}`;
+        const sliderId = `slider_${id}`;
+        const input = document.getElementById(id);
+        const slider = document.getElementById(sliderId);
+        if (input && slider) {
+          slider.addEventListener("input", () => {
+            if (Number(input.value) !== Number(slider.value)) {
+              input.focus();
+              input.value = slider.value;
+            }
+          });
+          input.addEventListener("input", () => {
+            if (Number(slider.value) !== Number(input.value)) {
+              slider.value = input.value;
+            }
+          });
+        }
+      });
+    });
+  }
+
+  function enableSlider(mode, enable) {
+    const sliders = document.querySelectorAll(`.mode-block[data-mode="${mode}"] input[type="range"]`);
+    sliders.forEach(slider => {
+      slider.style.display = enable ? 'block' : 'none';
+    });
+  }
+
   function enableButton(mode, enable) {
     const btn = document.querySelector(`.mode-block[data-mode="${mode}"] .offset-btn`);
     if (btn) {
       btn.style.display = enable ? 'inline-block' : 'none';
+    }
+  }
+
+  function enableCurrentLevel(mode, enable) {
+    const tbl = document.querySelector(`.mode-block[data-mode="${mode}"] .level-table`);
+    if (tbl) {
+      tbl.style.display = enable ? "table" : "none";
     }
   }
 
@@ -319,6 +549,7 @@
     document.querySelector('.save-btn').style.display = "inline-block";
     document.getElementById('warn-ico').style.display = "inline";
     document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "inline-block");
+    document.querySelectorAll('.duty').forEach(span => span.style.display = "none");
   }
 
   function readCalibration() {
@@ -327,6 +558,7 @@
     document.querySelector('.save-btn').style.display = "none";
     document.getElementById('warn-ico').style.display = "none";
     document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "none");
+    document.querySelectorAll('.duty').forEach(span => span.style.display = "inline-block");
     fetch("/config?update=1", { method: "POST" })
       .then(() => setTimeout(fetchJson, 200));
   }
@@ -337,6 +569,7 @@
     document.querySelector('.save-btn').style.display = "none";
     document.getElementById('warn-ico').style.display = "none";
     document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "none");
+    document.querySelectorAll('.duty').forEach(span => span.style.display = "inline-block");
     fetch("/config?update=2", { method: "POST" })
   }
 
@@ -367,14 +600,28 @@
   }
 
   function updateUI() {
-    const c = cachedJson["calibration"] || {};
+    let cur_offset_v = 0;
+    let cur_offset_h = 0;
+    const cal = cachedJson["calibration"] || {};
     ["calib_vl", "calib_vr", "calib_hl", "calib_hr"].forEach(key => {
       const id = "calibration_" + key;
       if (document.activeElement.id !== id) {
         const el = document.getElementById(id);
-        if (el && key in c) el.value = c[key];
+        if (el && key in cal) el.value = cal[key];
       }
     });
+    if ("duty" in cal) {
+      ["vl", "vr", "hl", "hr"].forEach(side => {
+        const calibKey = "calib_" + side;
+        if (!(calibKey in cal)) return;
+        const dutyVal = cal.duty + cal[calibKey];
+        const pctVal = (dutyVal * 100 / 255).toFixed(0) + " %";
+        const dutyEl = document.getElementById("duty_" + side);
+        const pctEl  = document.getElementById("pct_" + side);
+        if (dutyEl) dutyEl.textContent = dutyVal;
+        if (pctEl)  pctEl.textContent  = pctVal;
+      });
+    }
     const modes = ["offroad", "comfort", "sport1", "sport2"];
     modes.forEach(mode => {
       const data = cachedJson[mode];
@@ -384,19 +631,36 @@
         const el = document.getElementById(id);
         if (!el) return;
         if (mode === currentMode) {
-		  enableButton(mode, true);
+          enableSlider(mode, true);
+          enableButton(mode, true);
+          enableCurrentLevel(mode, true);
           el.disabled = false;
           if (document.activeElement.id !== id && key in data) el.value = data[key];
+          if (key === "offset_nv" && key in data) cur_offset_v = Number(data[key]);
+          if (key === "offset_nh" && key in data) cur_offset_h = Number(data[key]);
         } else {
-		  enableButton(mode, false);
+          enableSlider(mode, false);
+          enableButton(mode, false);
+          enableCurrentLevel(mode, false);
           el.disabled = true;
           if (key in data) el.value = data[key];
         }
       });
     });
+    const level = cachedJson["level"] || {};
+    if (Object.keys(level).length) {
+      ["fzgn_vl", "fzgn_vr", "fzgn_hl", "fzgn_hr"].forEach(key => {
+        document.querySelectorAll(`.${key} .value`).forEach(el => {
+          el.textContent = (key in level)
+            ? level[key] - 127 + (key.includes("_v") ? cur_offset_v : cur_offset_h)
+            : "—";
+        });
+      });
+    }
   }
 
   fetchJson();
+  initSliders();
   setInterval(fetchJson, 2000);
 </script>
 

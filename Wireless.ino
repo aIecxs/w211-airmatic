@@ -79,10 +79,16 @@ void updateJson() {
   calibration["calib_vr"] = calib_vr;
   calibration["calib_hl"] = calib_hl;
   calibration["calib_hr"] = calib_hr;
+  calibration["duty"]     = duty;
   JsonObject modeObj = doc.containsKey(mode) ? doc[mode].as<JsonObject>() : doc.createNestedObject(mode);
   modeObj["offset_nv"] = offset_nv;
   modeObj["offset_nh"] = offset_nh;
   doc["current_mode"] = mode;
+  JsonObject level = doc.containsKey("level") ? doc["level"].as<JsonObject>() : doc.createNestedObject("level");
+  level["fzgn_vl"] = FS_340h.FZGN_VL;
+  level["fzgn_vr"] = FS_340h.FZGN_VR;
+  level["fzgn_hl"] = FS_340h.FZGN_HL;
+  level["fzgn_hr"] = FS_340h.FZGN_HR;
   serializeJson(doc, configJson);
 }
 

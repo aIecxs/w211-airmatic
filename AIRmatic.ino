@@ -487,9 +487,9 @@ void setup() {
     1);            // pin task to core 1
 
   (void) readConfig();
+  wifiSetup();
 
   // create a task that will be executed along the loop() function, with priority 1
-  wifiSetup();
   xTaskCreate(
     wifiEvent,     // Task function
     "WiFi Event",  // name of task
