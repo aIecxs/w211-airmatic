@@ -101,7 +101,9 @@ int8_t offset_nv = 0; // mm front axle level custom offset
 int8_t offset_nh = 0; // mm rear axle level custom offset
 float factor = (float) duty * 2.0 / 100.0;
 
-volatile unsigned long timer = 0; // millis()
+bool wifiConnected = false;
+volatile unsigned long timer1 = 0; // millis()
+volatile unsigned long timer2 = 0;
 
 volatile bool canDown = true;
 volatile bool canInterruptFlag0 = false;
@@ -365,28 +367,30 @@ void IRAM_ATTR onCanInterrupt1() {
 
 // power down no CAN traffic
 void go_to_sleep(unsigned int timeout) {
-  if ( millis() - timer > timeout ) {
+  if ( millis() - timer1 > timeout ) {
     portENTER_CRITICAL(&mux_awake);
-    timer = millis();
+    timer1 = millis();
+    timer2 = timer1;
     canDown = true;
     portEXIT_CRITICAL(&mux_awake);
     digitalWrite(LED_BUILTIN, LOW);
     Serial.println("Can: timeout ... no traffic");
     // put TJA1055 into go-to-sleep
-    digitalWrite(STB, LOW);
-    delay_us(1000);
-    digitalWrite(EN, LOW);
+    if (!wifiConnected) {
+      digitalWrite(STB, LOW);
+      delay_us(1000);
+      digitalWrite(EN, LOW);
+    }
   }
 }
 
 // keep awake CAN traffic
 void awake(unsigned int delayMs) {
-  static unsigned long time = 0;
   bool wakeup = false;
-  if ( millis() - time > delayMs ) {
-    time = millis();
+  if ( millis() - timer2 > delayMs ) {
     portENTER_CRITICAL(&mux_awake);
-    timer = time;
+    timer2 = millis();
+    timer1 = timer2;
     if (canDown) {
       canDown = false;
       wakeup = true;
@@ -687,5 +691,9 @@ void loop() {
     digitalWrite(WO, !digitalRead(WO));
   }
 
+  // reset ESP32 once a week
+  if (millis() > 600000000) {
+    ESP.restart();
+  }
   delay(10);
 }

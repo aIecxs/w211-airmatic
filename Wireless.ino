@@ -28,7 +28,6 @@ const char* password = "12345678";
 AsyncWebServer server(80);
 
 unsigned long ota_progress_millis = 0;
-
 uint8_t update = 1;
 
 void onOTAStart() {
@@ -216,7 +215,11 @@ void wifiEvent(void *parameter) {
     if (millis() - time > 5000) {
       time = millis();
       if (WiFi.softAPgetStationNum() > 0) {
+        wifiConnected = true;
         wifi_up = time;
+        awake(100);
+      } else {
+        wifiConnected = false;
       }
       if (wifi && (time - wifi_up > wifi_down )) {
         wifi = false;
