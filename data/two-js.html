@@ -55,6 +55,9 @@
         });
         rotationTween.play()
 
+        // Wir müssen hier abziehen, statt draufrechnen
+        // weil auf der Bühne der Koordinatenursprung (0,0) oben links ist
+        // und rechts unten positiv ist (N, N)
         const y = chassisOrigin.y - lowering
         const transTween = gsap.to(chassis.translation, {
             y: y,
@@ -72,12 +75,18 @@
         const frontHeightMm = frontInput.value * 1
         const rearHeightMm = rearInput.value * 1
         const axisWidthMm = px2Mm(rearWheel.translation.x - frontWheel.translation.x)
-        const slope = (frontHeightMm - rearHeightMm) / axisWidthMm
-        const loweringMm = frontHeightMm + (slope * (axisWidthMm/2))
+
+        // Der Neigungswinkel kann so weiterverwendet werden in radiant
+        const slopeAngle = (frontHeightMm - rearHeightMm) / axisWidthMm
+
+        // Die Absenkung muss aber negiert werden (Chassis-Ursprung + Absenkung)
+        const loweringMm = frontHeightMm + (slopeAngle * (axisWidthMm/2)) * -1
+
+        console.log(slopeAngle, loweringMm)
 
         // Die Berechnung erfolgt in mm, aber die Projektion auf der Bühne muss in px sein
         const loweringPx = mm2Px(loweringMm)
-        _gear(slope, loweringPx)
+        _gear(slopeAngle, loweringPx)
     }
 
 </script>
