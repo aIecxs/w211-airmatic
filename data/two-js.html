@@ -10,6 +10,10 @@
             border: 1px solid #333;
             background: #eee;
         }
+
+        .mmInput {
+            width: 4rem;
+        }
     </style>
 </head>
 <body>
@@ -38,6 +42,8 @@
     const chassisOrigin = chassis.position.clone()
     two.play();
 
+    // Wir behaupten jetzt einfach mal dass das Verhältnis der Pixel zur realen Welt 1:10 ist
+    // Die Auto-Grafik ist 236px breit, also ist das Auto 2,36m lang
     function mm2Px(mm) {
         return mm/10
     }
@@ -91,8 +97,8 @@
 
 </script>
 <form name="gearing">
-<input type="number" name="front" value="0" onchange="_calcSlope()">
-<input type="number" name="rear" value="0" onchange="_calcSlope()">
+    <label>Front (mm): <input type="number" name="front" value="0" onchange="_calcSlope()" class="mmInput"></label>
+    <label>Rear (mm): <input type="number" name="rear" value="0" onchange="_calcSlope()" class="mmInput"></label>
 </form>
 </body>
 </html>
