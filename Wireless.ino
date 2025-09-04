@@ -223,6 +223,7 @@ void wifiEvent(void *parameter) {
       }
       if (wifi && (time - wifi_up > wifi_down )) {
         wifi = false;
+        wifiConnected = false;
         Serial.println("HTTP server stop");
         server.end();
         WiFi.softAPdisconnect(true);

@@ -1,104 +1,93 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <meta charset="utf-8">
     <title>Lowrider</title>
-    <script src="lib/two.min.js"></script>
-    <script src="lib/gsap.min.js"></script>
+    <script src="./two.min.js"></script>  // 2D rendering engine by Jono (@jonobr1)
+    <script src="./gsap.min.js"></script> // GreenSock Animation Platform by Jack Doyle (@jackdoyle)
     <style>
-        canvas {
-            border: 1px solid #333;
-            background: #eee;
-        }
-
-        .mmInput {
-            width: 4rem;
-        }
+      canvas {
+        border: 1px solid #333;
+        background: #eee;
+      }
+      .mmInput {
+        width: 4rem;
+      }
     </style>
-</head>
-<body>
-<!-- Vorgegebenes Canvas -->
-<canvas id="scene" width="300" height="120"></canvas>
+  </head>
+  <body>
+    <canvas id="scene" width="808" height="316"></canvas>
 
-<script>
-    function deg2rad(deg) {
+    <script>
+      function deg2rad(deg) {
         return deg * (Math.PI / 180);
-    }
+      }
 
-    const elem = document.getElementById('scene');
-    const two = new Two({
-        width: 300,
-        height: 120,
-        domElement: elem,   // eigenes Canvas übergeben
+      const elem = document.getElementById('scene');
+      const two = new Two({
+        width: 808,
+        height: 316,
+        domElement: elem,
         type: Two.Types.canvas
-    }).appendTo(elem.parentNode);
+      }).appendTo(elem.parentNode);
 
-    // Pixelgenaues Positionieren der Sprites
-    const frontWheel = two.makeSprite("./sprites/wheel.png", 70, 80);
-    const rearWheel = frontWheel.clone(two)
-    rearWheel.translation.set(208, 80)
-    const chassis = two.makeSprite('./sprites/chassis.png', 140, 40);
+      const frontWheel = two.makeSprite("./wheel.png", 165, 200);
+      const rearWheel = frontWheel.clone(two);
+      rearWheel.translation.set(594, 200);
+      const chassis = two.makeSprite('./chassis.png', 404, 158);
 
-    const chassisOrigin = chassis.position.clone()
-    two.play();
+      const chassisOrigin = chassis.position.clone();
+      two.play();
 
-    // Wir behaupten jetzt einfach mal dass das Verhältnis der Pixel zur realen Welt 1:10 ist
-    // Die Auto-Grafik ist 236px breit, also ist das Auto 2,36m lang
-    function mm2Px(mm) {
-        return mm/10
-    }
+      function mm2px(mm) {
+        return mm / 3;
+      }
 
-    function px2Mm(px) {
-        return px*10
-    }
+      function px2mm(px) {
+        return px * 3;
+      }
 
-    function _gear(rad, lowering) {
+      function _gear(rad, offset) {
         const rotationTween = gsap.to(chassis, {
-            rotation: rad,
-            duration: 1,
-            ease: "power2.inOut",
-            paused: true
+          rotation: rad,
+          duration: 1,
+          ease: "power2.inOut",
+          paused: true
         });
-        rotationTween.play()
+        rotationTween.play();
 
-        // Wir müssen hier abziehen, statt draufrechnen
-        // weil auf der Bühne der Koordinatenursprung (0,0) oben links ist
-        // und rechts unten positiv ist (N, N)
-        const y = chassisOrigin.y - lowering
+        const y = chassisOrigin.y - offset;
         const transTween = gsap.to(chassis.translation, {
-            y: y,
-            duration: 1,
-            ease: "power2.inOut",
-            paused: true
+          y: y,
+          duration: 1,
+          ease: "power2.inOut",
+          paused: true
         });
-        transTween.play()
-    }
+        transTween.play();
+      }
 
-    function _calcSlope() {
-        const form = document.forms.namedItem("gearing")
-        const frontInput = form.elements.namedItem("front")
-        const rearInput = form.elements.namedItem("rear")
-        const frontHeightMm = frontInput.value * 1
-        const rearHeightMm = rearInput.value * 1
-        const axisWidthMm = px2Mm(rearWheel.translation.x - frontWheel.translation.x)
+      function _calcSlope() {
+        const form = document.forms.namedItem("gearing");
+        const frontInput = form.elements.namedItem("front");
+        const rearInput = form.elements.namedItem("rear");
 
-        // Der Neigungswinkel kann so weiterverwendet werden in radiant
-        const slopeAngle = (frontHeightMm - rearHeightMm) / axisWidthMm
+        const frontHeight = frontInput.value;
+        const rearHeight = rearInput.value;
 
-        // Die Absenkung muss aber negiert werden (Chassis-Ursprung + Absenkung)
-        const loweringMm = frontHeightMm + (slopeAngle * (axisWidthMm/2)) * -1
+        const axisWidth = px2mm(rearWheel.translation.x - frontWheel.translation.x);
+        const slopeAngle = (frontHeight - rearHeight) / axisWidth;
+        const lowering = frontHeight - (slopeAngle * (axisWidth / 2));
 
-        console.log(slopeAngle, loweringMm)
+        console.log(slopeAngle, lowering);
 
-        // Die Berechnung erfolgt in mm, aber die Projektion auf der Bühne muss in px sein
-        const loweringPx = mm2Px(loweringMm)
-        _gear(slopeAngle, loweringPx)
-    }
+        const loweringPx = mm2px(lowering);
+        _gear(slopeAngle, loweringPx);
+      }
+    </script>
 
-</script>
-<form name="gearing">
-    <label>Front (mm): <input type="number" name="front" value="0" onchange="_calcSlope()" class="mmInput"></label>
-    <label>Rear (mm): <input type="number" name="rear" value="0" onchange="_calcSlope()" class="mmInput"></label>
-</form>
-</body>
+    <form name="gearing">
+      <label>Front (mm): <input type="number" name="front" value="0" onchange="_calcSlope()" class="mmInput"></label>
+      <label>Rear (mm): <input type="number" name="rear" value="0" onchange="_calcSlope()" class="mmInput"></label>
+    </form>
+  </body>
 </html>

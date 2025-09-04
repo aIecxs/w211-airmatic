@@ -101,7 +101,7 @@ int8_t offset_nv = 0; // mm front axle level custom offset
 int8_t offset_nh = 0; // mm rear axle level custom offset
 float factor = (float) duty * 2.0 / 100.0;
 
-bool wifiConnected = false;
+volatile bool wifiConnected = false;
 volatile unsigned long timer1 = 0; // millis()
 volatile unsigned long timer2 = 0;
 
