@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <title>Lowrider</title>
-    <script src="./two.min.js"></script>  // 2D rendering engine by Jono (@jonobr1)
-    <script src="./gsap.min.js"></script> // GreenSock Animation Platform by Jack Doyle (@jackdoyle)
+    <script src="./two.min.js"></script>  <!-- 2D rendering engine by Jono (@jonobr1) -->
+    <script src="./gsap.min.js"></script> <!-- GreenSock Animation Platform by Jack Doyle (@jackdoyle) -->
     <style>
       canvas {
         border: 1px solid #333;
@@ -31,13 +31,39 @@
         type: Two.Types.canvas
       }).appendTo(elem.parentNode);
 
+      // ----- Wheels -----
       const frontWheel = two.makeSprite("./wheel.png", 165, 200);
       const rearWheel = frontWheel.clone(two);
       rearWheel.translation.set(594, 200);
+
+      // ----- Chassis -----
       const chassis = two.makeSprite('./chassis.png', 404, 158);
 
+      // ----- Wheel Mount Recess -----
+      const chassisBg = two.makeRectangle(chassis.position.x, chassis.position.y, 550, 75);
+      chassisBg.fill = '#333332'; // dark gray
+      chassisBg.noStroke();
+
+      // Define offset: 25px left, 21px down
+      const rectOffset = new Two.Vector(-25, 21);
+
+      // Draw order: rectangle -> wheels -> chassis
+      two.scene.add(chassisBg);
+      two.scene.add(frontWheel, rearWheel);
+      two.scene.add(chassis);
+
       const chassisOrigin = chassis.position.clone();
+
       two.play();
+
+      // Make rectangle follow chassis with offset
+      two.bind('update', () => {
+        chassisBg.position.set(
+          chassis.position.x + rectOffset.x,
+          chassis.position.y + rectOffset.y
+        );
+        chassisBg.rotation = chassis.rotation;
+      });
 
       function mm2px(mm) {
         return mm / 3;
@@ -48,6 +74,9 @@
       }
 
       function _gear(rad, offset) {
+        const y = chassisOrigin.y - offset;
+
+        // Rotate chassis
         const rotationTween = gsap.to(chassis, {
           rotation: rad,
           duration: 1,
@@ -56,7 +85,7 @@
         });
         rotationTween.play();
 
-        const y = chassisOrigin.y - offset;
+        // Vertical translation of chassis
         const transTween = gsap.to(chassis.translation, {
           y: y,
           duration: 1,
