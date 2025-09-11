@@ -8,10 +8,32 @@
       font-family: sans-serif;
       padding: 2em;
       background: #f0f0f0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
     }
 
-    h1 { font-size: 56px; margin-bottom: 1em; }
-    h2 { font-size: 32px; margin-top: 2em; }
+    h1 {
+      font-size: 56px;
+      margin-bottom: 1em;
+      text-align: left;
+    }
+
+    h2 {
+      font-size: 32px;
+      margin-top: 2em;
+      text-align: left;
+    }
+
+    iframe {
+      width: 835px;
+      height: 359px;
+      border: none;
+      display: block;
+      margin: 1rem auto;
+    }
 
     table {
       border-collapse: collapse;
@@ -46,6 +68,20 @@
       font-size: 2.5em;
     }
 
+    .calibration-block {
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .calibration-block h2 {
+      max-width: 808px;
+      width: 100%;
+      text-align: left;
+    }
+
     .calibration-block table {
       width: 100%;
       max-width: 808px;
@@ -77,6 +113,13 @@
       align-items: center;
       justify-content: space-around;
       width: 100%;
+    }
+    
+    .button-row {
+      display: flex;
+      justify-content: flex-start;
+      gap: 1em;
+      width: 808px;
     }
 
     button {
@@ -154,6 +197,7 @@
 
 <body>
   <h1>AIRmatic level custom offset</h1>
+
   <!-- Mode blocks -->
   <div class="mode-block" data-mode="comfort">
     <h2>
@@ -166,19 +210,22 @@
         <td>(HR) rear right</td>
       </tr>
       <tr>
-        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vr"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
-        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vl"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
         <td>(VL) front left</td>
         <td>(HL) rear left</td>
       </tr>
     </table>
-    <img src="comfort.png" class="mode-image" alt="Comfort">
+
+    <!-- 2D Canvas Scene -->
+    <iframe src="two-js.html"></iframe>
+ 
     <table class="offset-table">
       <tr>
         <td class="input-cell">
@@ -222,19 +269,22 @@
         <td>(HR) rear right</td>
       </tr>
       <tr>
-        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vr"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
-        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vl"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
         <td>(VL) front left</td>
         <td>(HL) rear left</td>
       </tr>
     </table>
-    <img src="sport1.png" class="mode-image" alt="Sport">
+
+    <!-- 2D Canvas Scene -->
+    <iframe src="two-js.html"></iframe>
+ 
     <table class="offset-table">
       <tr>
         <td class="input-cell">
@@ -278,19 +328,22 @@
         <td>(HR) rear right</td>
       </tr>
       <tr>
-        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vr"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
-        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vl"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
         <td>(VL) front left</td>
         <td>(HL) rear left</td>
       </tr>
     </table>
-    <img src="sport2.png" class="mode-image" alt="Sport II">
+
+    <!-- 2D Canvas Scene -->
+    <iframe src="two-js.html"></iframe>
+ 
     <table class="offset-table">
       <tr>
         <td class="input-cell">
@@ -334,19 +387,22 @@
         <td>(HR) rear right</td>
       </tr>
       <tr>
-        <td class="fzgn_vr"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hr"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vr"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hr"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
-        <td class="fzgn_vl"><span class="value">—</span> <span class="unit">mm</span></td>
-        <td class="fzgn_hl"><span class="value">—</span> <span class="unit">mm</span></td>
+        <td class="fzgn_vl"><span class="value">-</span> <span class="unit">mm</span></td>
+        <td class="fzgn_hl"><span class="value">-</span> <span class="unit">mm</span></td>
       </tr>
       <tr>
         <td>(VL) front left</td>
         <td>(HL) rear left</td>
       </tr>
     </table>
-    <img src="offroad.png" class="mode-image" alt="Offroad">
+
+    <!-- 2D Canvas Scene -->
+    <iframe src="two-js.html"></iframe>
+ 
     <table class="offset-table">
       <tr>
         <td class="input-cell">
@@ -382,10 +438,12 @@
   <!-- Calibration block -->
   <div class="calibration-block">
     <h2>PWM Voltage Calibration (do not change!)</h2>
-    <button onclick="readCalibration()">Reset</button>
-    <button class="edit-btn" onclick="enableCalibration()">Edit</button>
-    <button class="save-btn" onclick="saveCalibration()" style="display:none;">Save</button>
-    <span id="warn-ico" style="display:none; font-size: 2.4em;">&#x26A0;&#xFE0F;</span>
+    <div class="button-row">
+      <button onclick="readCalibration()">Reset</button>
+      <button class="edit-btn" onclick="enableCalibration()">Edit</button>
+      <button class="save-btn" onclick="saveCalibration()" style="display:none;">Save</button>
+      <span id="warn-ico" style="display:none; font-size: 2.4em;">&#x26A0;&#xFE0F;</span>
+    </div>
     <table>
       <tr>
         <td>(VR) front right</td>
@@ -394,40 +452,40 @@
       <tr>
         <td>
           <div class="calibration-control">
-            <span class="duty" id="duty_vr" style="display:inline-block;">—</span>
+            <span class="duty" id="duty_vr" style="display:inline-block;">-</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_vr" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vr', +1)" style="display:none;">+</button>
-            <span class="duty" id="pct_vr" style="display:inline-block;">—</span>
+            <span class="duty" id="pct_vr" style="display:inline-block;">-</span>
           </div>
         </td>
         <td>
           <div class="calibration-control">
-            <span class="duty" id="duty_hr" style="display:inline-block;">—</span>
+            <span class="duty" id="duty_hr" style="display:inline-block;">-</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_hr" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hr', +1)" style="display:none;">+</button>
-            <span class="duty" id="pct_hr" style="display:inline-block;">—</span>
+            <span class="duty" id="pct_hr" style="display:inline-block;">-</span>
           </div>
         </td>
       </tr>
       <tr>
         <td>
           <div class="calibration-control">
-            <span class="duty" id="duty_vl" style="display:inline-block;">—</span>
+            <span class="duty" id="duty_vl" style="display:inline-block;">-</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_vl" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_vl', +1)" style="display:none;">+</button>
-            <span class="duty" id="pct_vl" style="display:inline-block;">—</span>
+            <span class="duty" id="pct_vl" style="display:inline-block;">-</span>
           </div>
         </td>
         <td>
           <div class="calibration-control">
-            <span class="duty" id="duty_hl" style="display:inline-block;">—</span>
+            <span class="duty" id="duty_hl" style="display:inline-block;">-</span>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', -1)" style="display:none;">−</button>
             <input type="number" id="calibration_calib_hl" disabled>
             <button class="inc-btn" onclick="incrementValue('calibration_calib_hl', +1)" style="display:none;">+</button>
-            <span class="duty" id="pct_hl" style="display:inline-block;">—</span>
+            <span class="duty" id="pct_hl" style="display:inline-block;">-</span>
           </div>
         </td>
       </tr>
@@ -442,6 +500,14 @@
   let cachedJson = {};
   let lastFocused = null;
   let currentMode = null;
+ 
+  // additional offset for 2D rendering animation (mm)
+  const offset = {
+    comfort: { nv:   0, nh:   0 },
+    sport1:  { nv: -10, nh: -10 },
+    sport2:  { nv: -15, nh: -15 },
+    offroad: { nv:  25, nh:  25 }
+  };
 
   document.addEventListener('focusin', (event) => {
     if (event.target.tagName === 'INPUT') {
@@ -510,16 +576,59 @@
             if (Number(input.value) !== Number(slider.value)) {
               input.focus();
               input.value = slider.value;
+              syncCanvasWithInputs(mode);
             }
           });
           input.addEventListener("input", () => {
             if (Number(slider.value) !== Number(input.value)) {
               slider.value = input.value;
+              syncCanvasWithInputs(mode);
             }
           });
         }
       });
     });
+  }
+
+  function syncCanvasWithInputs(mode) {
+    const block = document.querySelector(`.mode-block[data-mode="${mode}"]`);
+    if (!block) return;
+
+    const iframe = block.querySelector("iframe");
+    if (!iframe || !iframe.contentWindow) return;
+
+    function doSync() {
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!iframeDoc) return;
+
+      const nvInput = block.querySelector(`#${mode}_offset_nv`);
+      const nhInput = block.querySelector(`#${mode}_offset_nh`);
+
+      let frontVal = Number(nvInput.value);
+      let rearVal  = Number(nhInput.value);
+
+      // apply additional offset for 2D rendering animation (mm)
+      if (offset[mode]) {
+        frontVal += offset[mode].nv || 0;
+        rearVal  += offset[mode].nh || 0;
+      }
+
+      const frontInput = iframeDoc.querySelector('input[name="front"]');
+      const rearInput  = iframeDoc.querySelector('input[name="rear"]');
+
+      if (frontInput) frontInput.value = frontVal;
+      if (rearInput)  rearInput.value  = rearVal;
+
+      if (typeof iframe.contentWindow._calcSlope === "function") {
+        iframe.contentWindow._calcSlope();
+      }
+    }
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      doSync();
+    } else {
+      iframe.onload = doSync;
+    }
   }
 
   function enableSlider(mode, enable) {
@@ -540,6 +649,20 @@
     const tbl = document.querySelector(`.mode-block[data-mode="${mode}"] .level-table`);
     if (tbl) {
       tbl.style.display = enable ? "table" : "none";
+    }
+  }
+
+  function enableGearing(mode, enable) {
+    const form = document.querySelector(`.mode-block[data-mode="${mode}"] iframe`)?.contentWindow?.document?.forms["gearing"];
+    if (form) {
+      if (enable) {
+        form.elements["front"].disabled = false;
+        form.elements["rear"].disabled  = false;
+      } else {
+        form.elements["front"].disabled = true;
+        form.elements["rear"].disabled  = true;
+      }
+      form.style.display = "none";
     }
   }
 
@@ -634,6 +757,7 @@
           enableSlider(mode, true);
           enableButton(mode, true);
           enableCurrentLevel(mode, true);
+          enableGearing(mode, true);
           el.disabled = false;
           if (document.activeElement.id !== id && key in data) el.value = data[key];
           if (key === "offset_nv" && key in data) cur_offset_v = Number(data[key]);
@@ -642,9 +766,11 @@
           enableSlider(mode, false);
           enableButton(mode, false);
           enableCurrentLevel(mode, false);
+          enableGearing(mode, false);
           el.disabled = true;
           if (key in data) el.value = data[key];
         }
+        syncCanvasWithInputs(mode);
       });
     });
     const level = cachedJson["level"] || {};
@@ -653,7 +779,7 @@
         document.querySelectorAll(`.${key} .value`).forEach(el => {
           el.textContent = (key in level)
             ? level[key] - 127 + (key.includes("_v") ? cur_offset_v : cur_offset_h)
-            : "—";
+            : "-";
         });
       });
     }
