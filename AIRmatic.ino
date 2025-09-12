@@ -574,6 +574,8 @@ void loop() {
         mode = "comfort";
       }
     }
+  } else {
+    mode = "default";
   }
 
   // read offsets from table
@@ -692,7 +694,7 @@ void loop() {
   }
 
   // reset ESP32 once a week
-  if (millis() > 600000000) {
+  if (timeMs > 600000000) {
     ESP.restart();
   }
   delay(10);
