@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>WiFi Settings</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.9">
+    <style>
+      :root {
+        --label-w: 10rem;
+        --btn-w: 2rem;
+        --input-fixed: 200px;
+      }
+      body {
+        font-family: sans-serif;
+        margin: 1.5em;
+        max-width: 400px;
+        font-size: 1rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-bottom: 1em;
+        text-align: center;
+      }
+      .form-table {
+        display: grid;
+        grid-template-columns: var(--label-w) var(--btn-w) minmax(0, 1fr);
+        column-gap: 0;
+        row-gap: 0.5rem;
+        align-items: center;
+        width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+      }
+      .form-table label {
+        grid-column: 1;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toggle-btn {
+        grid-column: 2;
+        justify-self: end;
+        width: var(--btn-w);
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      .form-table input {
+        grid-column: 3;
+        width: 100%;
+        max-width: var(--input-fixed);
+        box-sizing: border-box;
+        font-size: 1rem;
+        padding: 0.4em;
+        column-gap: 0;
+      }
+      .submit-row {
+        display: flex;
+        justify-content: flex-start;
+        gap: 1rem;
+        margin-top: 1.25rem;
+      }
+      .submit-btn {
+        width: 5rem;
+        padding: 0.55rem 0;
+        font-size: 1rem;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 0.6em;
+        font-size: 0.9rem;
+        overflow-x: auto;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- github.com/digitalbazaar/forge/blob/v1.3.1/README.md?plain=1#L128 -->
+    <script src="./forge.min.js"></script>
+
+    <h2>WiFi Settings</h2>
+
+    <div class="form-table">
+      <label for="ssid">ESSID:</label>
+      <input id="ssid" type="text" maxlength="32" inputmode="text" data-label="ESSID" disabled>
+      <label for="oldpw">wpa2 passphrase:</label>
+      <button class="toggle-btn" type="button" onclick="togglePw('oldpw')" aria-label="show password">&#x1F441;</button>
+      <input id="oldpw" type="password" maxlength="32" inputmode="text" data-label="Password" disabled>
+      <label for="pw1">new passphrase:</label>
+      <button class="toggle-btn" type="button" onclick="togglePw('pw1')" aria-label="show password">&#x1F441;</button>
+      <input id="pw1" type="password" maxlength="32" inputmode="text" data-label="New Password" disabled>
+      <label for="pw2">confirm passphrase:</label>
+      <button class="toggle-btn" type="button" onclick="togglePw('pw2')" aria-label="show password">&#x1F441;</button>
+      <input id="pw2" type="password" maxlength="32" inputmode="text" data-label="Confirm Password" disabled>
+    </div>
+    <div class="submit-row">
+      <button class="submit-btn" onclick="return2home()">Cancel</button>
+      <button class="submit-btn" onclick="submitForm()" disabled>OK</button>
+    </div>
+    <pre id="out"></pre>
+
+    <script>
+      const whitelist = /^[\ !#$%&+,\-./0-9=?@A-Z_\\a-z~]+$/;
+      const pubKeyFile = "public.pem";
+
+      let cachedJson = {}; // JSON from ESP32
+      let salt = null;     // One-Time Session Key
+      let random1 = null;  // challenge
+      let random2 = null;  // response
+      let pseudoKey = null;
+      let update = 0;
+
+      const out = document.getElementById('out');
+
+      function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      // password rules
+      function validateField(el, minLen, maxLen) {
+        const v = el.value;
+        const label = el.dataset.label;
+        if (v.length < minLen) {
+          out.textContent += `${label} must be at least ${minLen} characters\n`;
+          return false;
+        } else if (v.length > maxLen) {
+          out.textContent += `${label} must be max ${maxLen} characters\n`;
+          return false;
+        } else if (!whitelist.test(v)) {
+          out.textContent += `${label} invalid\n`;
+          return false;
+        }
+        if (el.type === 'text') {
+          // specific whitespace rules
+          if (v.startsWith(' ') || v.endsWith(' ')) {
+            out.textContent += `${label} must not start or end with a whitespace\n`;
+            return false;
+          }
+          if (v.includes('  ')) {
+            out.textContent += `${label} must not contain consecutive whitespace\n`;
+            return false;
+          }
+        } else if (el.type === 'password') {
+          // forbid whitespace in password
+          if (v.includes(' ')) {
+            out.textContent += `${label} must not contain whitespaces\n`;
+            return false;
+          }
+        }
+        return true;
+      }
+
+      // wrapper for validateField()
+      function validateInputFields() {
+        let ok = true;
+        out.textContent = "";
+        document.querySelectorAll('input[type="text"]').forEach(el => {
+          if (!validateField(el, 1, 32)) ok = false;
+        });
+        document.querySelectorAll('input[type="password"], input[type="search"]').forEach(el => {
+          if (el.value.length !== 0 && !validateField(el, 8, 32)) ok = false;
+        });
+        return ok;
+      }
+
+      function togglePw(id){
+        let el = document.getElementById(id);
+        el.type = (el.type === "password") ? "search" : "password";
+      }
+
+      async function fetchJson() {
+        const response = await fetch("/config.json");
+        const data = await response.json();
+        cachedJson = data;
+      }
+
+      function sendUpdatedJson() {
+        fetch("/config?update=5", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cachedJson)
+        });
+      }
+
+      async function fetchCert() {
+        const res = await fetch(pubKeyFile);
+        if (!res.ok) {
+          out.textContent = `Cannot fetch ${pubKeyFile}\n`;
+          return null;
+        }
+        return await res.text();
+      }
+
+      function generateRandomSeed(len = 16) {
+        const arr = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          let v = 0;
+          // draw until non-zero
+          do { v = Math.floor(Math.random() * 256); } while (v === 0);
+          arr[i] = v;
+        }
+        return arr;
+      }
+
+      // compare two arrays
+      function handshake(a, b) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+          if (a[i] !== b[i]) return false;
+        }
+        return true;
+      }
+
+      // convert bytes -> ASCII hex string
+      function uint8ToHex(arr) {
+        return Array.from(arr)
+          .map(b => ('00' + b.toString(16)).slice(-2))
+          .join('');
+      }
+
+      // convert ASCII hex string -> bytes
+      function hex2uint8(hexStr) {
+        if (hexStr.length % 2) {
+          out.textContent = "Invalid hex string\n";
+        }
+        const arr = new Uint8Array(hexStr.length / 2);
+        for (let i = 0; i < arr.length; i++) {
+          arr[i] = parseInt(hexStr.substr(i * 2, 2), 16);
+        }
+        return arr;
+      }
+
+      // convert string -> bytes
+      function string2uint8(str) {
+        const arr = new Uint8Array(str.length);
+        for (let i = 0; i < str.length; i++) {
+          arr[i] = str.charCodeAt(i) & 0xFF;
+        }
+        return arr;
+      }
+
+      // convert bytes -> string
+      function uint8ToString(uint8Arr) {
+        let str = "";
+        let end = uint8Arr.length;
+        while (end > 0 && uint8Arr[end - 1] === 0) {
+          end--;
+        }
+        for (let i = 0; i < end; i++) {
+          str += String.fromCharCode(uint8Arr[i]);
+        }
+        return str;
+      }
+
+      // convert bytes -> string (padded)
+      function uint8ToForgeBuffer(uint8Arr) {
+        let str = "";
+        for (let i = 0; i < uint8Arr.length; i++) {
+          str += String.fromCharCode(uint8Arr[i]);
+        }
+        return str;
+      }
+
+      // AES-ECB encrypt
+      function aes_encrypt(plainBytes, key) {
+        // zero-pad to multiple of 16
+        let len = plainBytes.length;
+        len += (16 - len % 16) % 16;
+        const padded = new Uint8Array(len);
+        padded.set(plainBytes);
+
+        const keyBuf = forge.util.createBuffer(uint8ToForgeBuffer(key));
+        const cipher = forge.cipher.createCipher('AES-ECB', keyBuf);
+        cipher.start();
+        cipher.update(forge.util.createBuffer(uint8ToForgeBuffer(padded)));
+        cipher.finish();
+
+        const encryptedBytes = cipher.output.getBytes();
+        const encryptedArray = string2uint8(encryptedBytes);
+
+        // AES-ECB only: Truncate the last 16 bytes (1 AES block) as it seems { padding: false } is ignored -> bug?
+        const truncated = encryptedArray.slice(0, encryptedArray.length - 16);
+        return truncated;
+      }
+
+      // AES-ECB decrypt
+      function aes_decrypt(cipherBytes, key) {
+
+        const keyBuf = forge.util.createBuffer(uint8ToForgeBuffer(key));
+        const decipher = forge.cipher.createDecipher('AES-ECB', keyBuf);
+        decipher.start();
+        decipher.update(forge.util.createBuffer(uint8ToForgeBuffer(cipherBytes)));
+        decipher.finish();
+
+        const plainBytes = decipher.output.getBytes();
+        const arr = string2uint8(plainBytes);
+
+        return arr;
+      }
+
+      // garbage hash generator
+      function junkHash(key) {
+        let len = key.length;
+        if (len < 16) len = 16;
+        const outBuf = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          let byte = i < key.length ? key[i] : 0x00;
+          byte = (~byte) & 0xFF;
+          byte = ((byte & 0x0F) << 4) | ((byte & 0xF0) >> 4);
+          byte ^= 0xAA;
+          byte = ((byte + i) * (byte + i)) % 256;
+          if (byte === 0x00) {
+            byte = (i + 1);
+          }
+          outBuf[i] = byte;
+        }
+        return outBuf;
+      }
+
+      // encrypt with public key
+      function encryptSeed(seedBytes, certPem) {
+//        const cert = forge.pki.certificateFromPem(certPem);
+//        const pubKey = cert.publicKey;
+        const pubKey = forge.pki.publicKeyFromPem(certPem);
+        const seedStr = Array.from(seedBytes).map(b => String.fromCharCode(b)).join('');
+        const encrypted = pubKey.encrypt(seedStr, 'RSA-OAEP', { md: forge.md.sha1.create() });
+        return forge.util.encode64(encrypted);
+      }
+
+      // One-Time Session Key
+      async function generateSessionKey() {
+        document.querySelectorAll('input, button.submit-btn').forEach(el => el.disabled = true);
+        const pem = await fetchCert();
+
+        random1 = generateRandomSeed();
+        salt = generateRandomSeed();
+
+        const challenge = aes_encrypt(random1, salt);
+        const challengeHex = uint8ToHex(challenge);
+        const encSeedB64 = encryptSeed(salt, pem);
+
+        if (!cachedJson.wifi) {
+          cachedJson.wifi = {};
+        }
+        cachedJson.wifi.seed = challengeHex;
+        cachedJson.wifi.salt = encSeedB64;
+
+        sendUpdatedJson();
+      }
+
+      // read JSON from ESP32
+      async function readWifi() {
+        await fetchJson();
+
+        if (!cachedJson.wifi) {
+          out.textContent = "Cannot fetch JSON\n";
+          return false;
+        }
+
+        // read hex strings
+        const hashHex = cachedJson.wifi.hash;
+        const respHex = cachedJson.wifi.salt;
+
+        // convert hex -> bytes
+        const hash = hex2uint8(hashHex);
+        const resp = hex2uint8(respHex);
+
+        // decrypt response
+        pseudoKey = junkHash(salt);
+        random2 = aes_decrypt(resp, pseudoKey);
+
+        // verify handshake
+        if (handshake(junkHash(random1), random2)) {
+          // decrypt AES-ECB with old session key
+          const hash_old = aes_decrypt(hash, salt);
+          const ssid_old = uint8ToString(hash_old);
+
+          // fill HTML input field
+          document.querySelectorAll('input, button.submit-btn').forEach(el => el.disabled = false);
+          document.getElementById("ssid").value = ssid_old;
+          return true;
+        } else {
+          // terminate session
+          salt = null;
+          random1 = null;
+          random2 = null;
+          pseudoKey = null;
+          return false;
+        }
+      }
+
+      // verify password
+      function readPw() {
+        const pwdhash = junkHash(string2uint8(document.getElementById("oldpw").value));
+        const enc_hash = aes_encrypt(pwdhash, pseudoKey);
+        const seedHex = cachedJson.wifi.seed;
+        const seed = hex2uint8(seedHex);
+
+        // verify password
+        if (handshake(seed, enc_hash)) {
+          out.textContent = "Password success!\n";
+          return true;
+        } else {
+          // terminate session
+          salt = null;
+          random1 = null;
+          random2 = null;
+          pseudoKey = null;
+          document.getElementById('oldpw').value = '';
+          document.getElementById('pw1').value = '';
+          document.getElementById('pw2').value = '';
+          out.textContent = "invalid Password!\n";
+          return false;
+        }
+      }
+
+      function updatePw() {
+        const oldpw = document.getElementById('oldpw').value;
+        const pw1 = document.getElementById('pw1').value;
+        const pw2 = document.getElementById('pw2').value;
+        if (!pw1 && !pw2) {
+          // update ESSID
+          update = 1;
+        } else if (pw1 === pw2 && oldpw !== pw1) {
+          // update credentials
+          update = 2;
+        } else {
+          update = 0;
+          out.textContent = "confirm password\n";
+          return false;
+        }
+        return true;
+      }
+
+      function updateWifi() {
+
+        const hash_new = string2uint8(document.getElementById('ssid').value);
+        const seed_new = string2uint8(document.getElementById('pw1').value);
+        let hash = null;
+        let seed = null;
+        let challenge = null;
+        let hashHex = "";
+        let seedHex = "";
+        let challengeHex = "";
+
+        // encrypt
+        if (update > 1) {
+          // update credentials
+          hash = aes_encrypt(hash_new, salt);
+          seed = aes_encrypt(seed_new, salt);
+          challenge = aes_encrypt(random1, pseudoKey);
+          hashHex = uint8ToHex(hash);
+          seedHex = uint8ToHex(seed);
+          challengeHex = uint8ToHex(challenge);
+        } else if (update) {
+          // update ESSID
+          hash = aes_encrypt(hash_new, salt);
+          challenge = aes_encrypt(random1, pseudoKey);
+          hashHex = uint8ToHex(hash);
+          challengeHex = uint8ToHex(challenge);
+          seedHex = "";
+        }
+        cachedJson.wifi.hash = hashHex;
+        cachedJson.wifi.seed = seedHex;
+        cachedJson.wifi.salt = challengeHex;
+
+        // reset form
+        document.getElementById('oldpw').value = '';
+        document.getElementById('pw1').value = '';
+        document.getElementById('pw2').value = '';
+
+        // send
+        fetch("/config?update=6", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cachedJson)
+        });
+      }
+
+      // confirm session
+      async function rebootWifi() {
+        await sleep(1000);
+        await fetchJson();
+
+        if (!cachedJson.wifi) {
+          out.textContent = "Cannot fetch JSON\n";
+          return false;
+        }
+
+        // read hex string
+        const respHex = cachedJson.wifi.salt;
+
+        // convert hex -> bytes
+        const resp = hex2uint8(respHex);
+
+        // decrypt response
+        random2 = aes_decrypt(resp, salt);
+
+        // verify handshake
+        if (handshake(junkHash(random1), random2)) {
+          // terminate session
+          salt = null;
+          random1 = null;
+          random2 = null;
+          pseudoKey = null;
+          document.querySelectorAll('input, button.submit-btn').forEach(el => el.disabled = true);
+          out.textContent = "wifi credentials changed\n";
+          out.textContent += "rebooting...\n";
+          return true;
+        } else {
+          // terminate session
+          salt = null;
+          random1 = null;
+          random2 = null;
+          pseudoKey = null;
+          out.textContent = "Session expired\n";
+          return false;
+        }
+      }
+
+      // fill form from ESP32
+      async function initPage() {
+        let verified = false;
+        await fetchJson();
+        while (!verified) {
+          await generateSessionKey();
+          await sleep(1000);
+          verified = await readWifi();
+        }
+      }
+
+      // send form to ESP32
+      async function submitForm() {
+        if (!validateInputFields()) {
+          return;
+        }
+        // read wifi credentials
+        if (!updatePw()) {
+          return;
+        }
+        // verify password
+        if (!readPw()) {
+          await initPage();
+          return;
+        }
+        // update wifi credentials
+        await updateWifi();
+
+        // confirm handshake
+        if (await rebootWifi()) {
+          await sleep(10000);
+          window.location.href = "/";
+        } else {
+          await initPage();
+        }
+      }
+
+      function return2home() {
+        window.location.href = "/";
+      }
+
+      // run once at start
+      window.addEventListener("load", initPage);
+    </script>
+  </body>
+</html>
