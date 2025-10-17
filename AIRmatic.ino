@@ -1,6 +1,9 @@
 /*
  * AIRmatic Air Suspension Level Control DIY Kit
  * 
+ * Author:
+ * - @aIecxs
+ * 
  * Credits:
  * - ArduinoJson (https://github.com/bblanchon/ArduinoJson)
  * - ElegantOTA (https://github.com/ayushsharma82/ElegantOTA)
@@ -8,17 +11,20 @@
  * - AsyncTCP (https://github.com/ESPAsync/AsyncTCP)
  * - MCP2515 Arduino Library (https://github.com/autowp/arduino-mcp2515)
  * - CAN Bus reverse engineering by @rnd-ash (https://github.com/rnd-ash/mb-w211-pc)
+ * - The Mbed TLS Contributors @adeaarm, @paul-elliott-arm (https://github.com/Mbed-TLS)
  * 
  * Licensed under the MIT License.
- * Third-party libraries licensed under the LGPL-2.1 License.
+ * Third-party libraries licensed under the LGPL-2.1 License, Apache-2.0 OR GPL-2.0-or-later
  */
 
 #include <SPI.h>
 #include <mcp2515.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <ESPAsyncWebServer.h>
 #include "w211_can_c.h"
 #include "w211_can_b.h"
+#include "crypto.h"
 
 // reserved
 #define LED_BUILTIN GPIO_NUM_2
@@ -63,6 +69,20 @@
 
 // copy CAN_message into bit field decoder
 #define copyMsg(ptr) importMsg(#ptr, ptr, sizeof(*(ptr)), id, msg, len)
+
+// helper macros for creating unique variable names
+#define CONCAT_IMPL(x, y) x##y
+#define CONCAT(x, y) CONCAT_IMPL(x, y)
+#define delay_us(us) delay_us_INTERNAL(__COUNTER__, us)
+
+// forward declaration so the macro can reference the class
+class delayMicrosec;
+
+// this macro instantiates a static delayMicrosec() object per call site
+// identified by __COUNTER__ so each use of delay_us() has its own timer 
+#define delay_us_INTERNAL(n, us) \
+  static delayMicrosec CONCAT(delay_us_, n); \
+  CONCAT(delay_us_, n).wait(us)
 
 struct BlinkCmd {
   gpio_num_t pin;
@@ -151,31 +171,34 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
 }
 
 // non-blocking delayMicroseconds()
-void delay_us(uint32_t us) {
-    TaskHandle_t thisTask = xTaskGetCurrentTaskHandle();
-    // Timer callback: notify the sleeping task
-    auto timerCallback = [](void* arg) {
-        TaskHandle_t task = static_cast<TaskHandle_t>(arg);
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(task, &xHigherPriorityTaskWoken);
-        if (xHigherPriorityTaskWoken) {
-            portYIELD_FROM_ISR();
-        }
-    };
-    // Create one-shot esp_timer
+class delayMicrosec {
+  private:
     esp_timer_handle_t timer;
-    esp_timer_create_args_t timer_args = {
-        .callback = timerCallback,
-        .arg = (void*)thisTask,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "delay_us_timer"
-    };
-    esp_timer_create(&timer_args, &timer);
-    esp_timer_start_once(timer, us);  // Delay in microseconds
-    // Wait for notification (puts task to sleep)
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    esp_timer_delete(timer);
-}
+    TaskHandle_t task;
+  public:
+    delayMicrosec() : timer(nullptr), task(nullptr) {}
+    void wait(uint32_t us) {
+      task = xTaskGetCurrentTaskHandle();
+      if (!timer) {
+        esp_timer_create_args_t args = {
+          .callback = [](void* arg) {
+            delayMicrosec* self = static_cast<delayMicrosec*>(arg);
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            vTaskNotifyGiveFromISR(self->task, &xHigherPriorityTaskWoken);
+            if (xHigherPriorityTaskWoken) {
+              portYIELD_FROM_ISR();
+            }
+          },
+          .arg = this,
+          .dispatch_method = ESP_TIMER_TASK,
+          .name = "delay_us_timer"
+        };
+        esp_timer_create(&args, &timer);
+      }
+      esp_timer_start_once(timer, us);
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    }
+};
 
 // blink function: non-blocking wrapper
 void blinkTaskFunc(void *param) {
@@ -192,6 +215,15 @@ void blinkTaskFunc(void *param) {
   }
 }
 
+// Watchdog output pulse
+void startWatchdog(gpio_num_t wpin) {
+  const unsigned long wfreq = 1;    // 1 Hz
+  const unsigned char wres = 11;    // resolution 2048
+  const unsigned long wduty = 1024; // 50%
+  ledcAttach(wpin, wfreq, wres);
+  ledcWrite(wpin, wduty);
+}
+
 // blink function
 void blink(gpio_num_t pin, unsigned int ontime) {
   BlinkCmd cmd = {pin, ontime};
@@ -201,65 +233,65 @@ void blink(gpio_num_t pin, unsigned int ontime) {
 
 // debounce key input
 class GetKeyEvent {
-private:
-  const bool* btn1;
-  const bool* btn2;
-  bool lastState = false;
-  bool stableState = false;
-  bool justPressed = false;
-  bool repeating = false;
-  unsigned long lastChange = 0;
-  unsigned long lastRepeat = 0;
-  const unsigned long debounceTime = 40;
-  const unsigned long repeatDelay = 800;
-  const unsigned long repeatInterval = 600;
-public:
-  GetKeyEvent(const bool* b1, const bool* b2)
-    : btn1(b1), btn2(b2) {}
-  void read() {
-    bool combined = (*btn1) & (*btn2);
-    unsigned long time = millis();
-    if (combined != lastState) {
-      lastState = combined;
-      lastChange = time;
-    }
-    if ((time - lastChange) > debounceTime) {
-      if (combined != stableState) {
-        stableState = combined;
-        if (stableState) {
-          justPressed = true;
-          lastRepeat = time;
-          repeating = false;
-        } else {
-          repeating = false;
+  private:
+    const bool* btn1;
+    const bool* btn2;
+    bool lastState = false;
+    bool stableState = false;
+    bool justPressed = false;
+    bool repeating = false;
+    unsigned long lastChange = 0;
+    unsigned long lastRepeat = 0;
+    const unsigned long debounceTime = 40;
+    const unsigned long repeatDelay = 800;
+    const unsigned long repeatInterval = 600;
+  public:
+    GetKeyEvent(const bool* b1, const bool* b2)
+      : btn1(b1), btn2(b2) {}
+    void read() {
+      bool combined = (*btn1) & (*btn2);
+      unsigned long time = millis();
+      if (combined != lastState) {
+        lastState = combined;
+        lastChange = time;
+      }
+      if ((time - lastChange) > debounceTime) {
+        if (combined != stableState) {
+          stableState = combined;
+          if (stableState) {
+            justPressed = true;
+            lastRepeat = time;
+            repeating = false;
+          } else {
+            repeating = false;
+          }
         }
       }
-    }
-    if (stableState && !repeating && (time - lastRepeat) > repeatDelay) {
-      repeating = true;
-      lastRepeat = time;
-    }
-  }
-  bool pressed() {
-    if (justPressed) {
-      justPressed = false;
-      return true;
-    }
-    return false;
-  }
-  bool repeated() {
-    if (repeating) {
-      unsigned long time = millis();
-      if ((time - lastRepeat) > repeatInterval) {
+      if (stableState && !repeating && (time - lastRepeat) > repeatDelay) {
+        repeating = true;
         lastRepeat = time;
-        return true;
       }
     }
-    return false;
-  }
-  bool isDown() const {
-    return stableState;
-  }
+    bool pressed() {
+      if (justPressed) {
+        justPressed = false;
+        return true;
+      }
+      return false;
+    }
+    bool repeated() {
+      if (repeating) {
+        unsigned long time = millis();
+        if ((time - lastRepeat) > repeatInterval) {
+          lastRepeat = time;
+          return true;
+        }
+      }
+      return false;
+    }
+    bool isDown() const {
+      return stableState;
+    }
 };
 
 // for safety purposes - do not change
@@ -268,7 +300,7 @@ void limitOffset(int8_t* off) {
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
 }
 
-// read config.json
+// read config.json file from LittleFS
 JsonDocument readConfig() {
   JsonDocument doc;
   File file = LittleFS.open(config, "r");
@@ -290,7 +322,7 @@ JsonDocument readConfig() {
   return doc;
 }
 
-// update config.json
+// write config.json file to LittleFS
 void saveConfig(const JsonDocument& doc) {
   File file = LittleFS.open(config, "w");
   if (!file) {
@@ -350,6 +382,33 @@ void updateSettings(const String& mode, const String& offset, int8_t value) {
     modeObj = doc.createNestedObject(mode);
   }
   modeObj[offset] = value;
+  saveConfig(doc);
+}
+
+
+// read wifi credentials from config.json file
+void getWifi(String &hash_old, String &seed_old) {
+  JsonDocument doc = readConfig();
+  hash_old = "";
+  seed_old = "";
+  if (!doc.containsKey("wifi")) return;
+  JsonObject obj = doc["wifi"];
+  if (obj.containsKey("hash")) hash_old = obj["hash"].as<String>();
+  if (obj.containsKey("seed")) seed_old = obj["seed"].as<String>();
+}
+
+
+// write wifi credentials to config.json file
+void updateWifi(const String &hash_new, const String &seed_new) {
+  JsonDocument doc = readConfig();
+  JsonObject wifiObj;
+  if (doc.containsKey("wifi")) {
+    wifiObj = doc["wifi"];
+  } else {
+    wifiObj = doc.createNestedObject("wifi");
+  }
+  wifiObj["hash"].set(hash_new);
+  wifiObj["seed"].set(seed_new);
   saveConfig(doc);
 }
 
@@ -518,6 +577,7 @@ void setup() {
 
   // Watchdog output
   pinMode(WO, OUTPUT);
+  startWatchdog(WO); // 1 Hz
 
   // DAC offset voltage generator 4 kHz
   ledcAttach(PWM1, freq, res);
@@ -690,7 +750,8 @@ void loop() {
   // Watchdog output pulse
   if ( millis() - timeMs > 500 ) {
     timeMs = millis();
-    digitalWrite(WO, !digitalRead(WO));
+// from startWatchdog()
+//    digitalWrite(WO, !digitalRead(WO));
   }
 
   // reset ESP32 once a week

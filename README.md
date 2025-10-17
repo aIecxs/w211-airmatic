@@ -59,9 +59,13 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
   Asynchronous TCP library for ESP32 (dependency of ESPAsyncWebServer)  
   [ESPAsync/AsyncTCP](https://github.com/ESP32Async/AsyncTCP)  
 
+- **The Mbed TLS Contributors**  
+  [Mbed-TLS](https://github.com/Mbed-TLS)  
+
+
   ---
   
-**`⚠️ UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY ⚠️`**
+**&#x26A0;&#xFE0F; `UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY` &#x26A0;&#xFE0F;**
 
 
   **Offset Voltage**
@@ -210,7 +214,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
     Install the library via **Arduino Library Manager**: search for `ElegantOTA`  
     [https://github.com/ayushsharma82/ElegantOTA](https://github.com/ayushsharma82/ElegantOTA)  
     next open `%UserProfile%/Documents/Arduino/libraries/ElegantOTA/src/ElegantOTA.h` with Editor,  
-⚠️ modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1 ⚠️
+&#x26A0;&#xFE0F; modify the line: `#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1` -> change 0 to 1 &#x26A0;&#xFE0F;
 
  7. **ESPAsyncWebServer Library**  
     Install the library via **Arduino Library Manager**: search for `ESP Async WebServer` by ESP32Async  
@@ -233,6 +237,8 @@ To compile and upload the firmware to your ESP32, follow these steps:
     - CAN.ino  
     - w211_can_c.h  
     - w211_can_b.h  
+    - crypto.h  
+    - crypto.cpp  
 
 12. **Compile and Upload the firmware** (USB)  
     connect the ESP32 DevKit to Computer, open the Arduino Sketch, select the Board  
@@ -242,10 +248,10 @@ To compile and upload the firmware to your ESP32, follow these steps:
     (refer to guide [3. LittleFS support](README.md#installation) screenshot 4.)
 
 14. **Update the firmware** (WiFi)  
-    connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L24) for credentials)  
+    connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L27) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.0/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
-    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.0/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
+    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
 
 ---
 
@@ -266,7 +272,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
   Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module. For AIRmatic mode selection from center console (CAN C) is splitted from ECU. For Steering wheel buttons (CAN B) second CAN bus module with 16 MHz Crystal Oscillator is required.
 
 - **Connect MCU to PCB:**  
-  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L28) for pins)
+  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L34) for pins)
 
 ---
 
@@ -281,6 +287,9 @@ To compile and upload the firmware to your ESP32, follow these steps:
 ![usage](usage.png)
 
 **Wireless Usage**
+
+&#x26A0;&#xFE0F; After finishing configuration disconnect from the Wi-Fi network. Keeping Wi-Fi connected may keep the ESP32 powered and drain your car battery.
+
 
 - connect to ESP32 WiFi  
 - visit info page -> http://192.168.4.1/config
