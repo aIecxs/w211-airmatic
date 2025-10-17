@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to ESP32 Setup</title>
+    <style>
+      body {
+        margin: 5px auto;
+        padding: 0;
+        width: 95dvw;
+        height: 95dvh;
+        font-family: "Gill Sans", "Trebuchet MS", sans-serif;
+      }
+      .container {
+        display: grid;
+        grid-template-rows: 1fr auto auto auto;
+        border-radius: 15px;
+        background-image: 
+          url('connect.png'),
+          linear-gradient(to right, rgb(145, 206, 222), rgb(176, 217, 230));
+        background-repeat: no-repeat;
+        background-position: top center, center;
+        background-size: 100% auto, 100% 100%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        height: 100%;
+        overflow: hidden;
+        position: relative;
+      }
+      h1 {
+        color: #333;
+        margin: 15px auto;
+        text-align: center;
+      }
+      .notice {
+        margin: 0 auto;
+        padding: 10px;
+        border-radius: 10px;
+        font-size: 1em;
+        color: #444;
+        background-color: rgba(255, 255, 255, 0.8);
+        text-align: center;
+        display: inline-block;
+      }
+      .warning-title {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #c00;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+      }
+      .action-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+      }
+      .checkbox label {
+        font-size: 0.8em;
+      }
+      button {
+        padding: 5px 15px;
+        border: none;
+        background: #333;
+        color: #fff;
+        font-size: 1em;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #049;
+      }
+      .blink {
+        animation: blinkRed 0.4s ease-in-out 2;
+      }
+      @keyframes blinkRed {
+        0%, 100% { outline: none; }
+        50% { outline: 2px solid red; }
+      }
+      .video-container {
+        width: 75dvw;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        margin: 0 auto;
+        border-radius: 10px;
+      }
+      .video-heading {
+        display: none;
+        margin: 5px auto;
+        padding: 5px 5px;
+        border-radius: 5px;
+        background: linear-gradient(
+          to right,
+          rgba(145, 206, 222, 0.9),
+          rgba(176, 217, 230, 0.9)
+        );
+        animation: glitch 3s steps(100) 5;
+        animation-delay: 30s;
+        color: #151515;
+        font-size: 0.8em;
+        text-align: center;
+        }
+      @keyframes glitch { 
+        0% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        1% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        2% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        3% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        4% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        5% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        6% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        7% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        8% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        9% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        10% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        11% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        12% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        13% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        14% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        15% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        16% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        17% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        18% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        19% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        20% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        21% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        22% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        23% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        24% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        25% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        26% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0.5px);}
+        27% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0.5px);}
+        28% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        29% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        30% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        31% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        32% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        33% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        34% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        35% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0.5px);}
+        36% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0.5px);}
+        37% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0.5px);}
+        38% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        39% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        40% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        41% { text-shadow: 45px 0 0 #0c33f5, -45px 0 0 lime; filter: blur(0);}
+        42% { text-shadow: 0 0 0 #0c33f5, 0 0 0 lime; filter: blur(0);}
+        43% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        44% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        45% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        46% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        47% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0.5px);}
+        48% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        49% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        50% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        51% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        52% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        53% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        54% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        55% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0.5px);}
+        56% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0.5px);}
+        57% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0.5px);}
+        58% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        59% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        60% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        61% { text-shadow: 30px 0 0 red, -30px 0 0 lime; filter: blur(0);}
+        62% { text-shadow: 0 0 0 red, 0 0 0 lime; filter: blur(0);}
+        63% { text-shadow: 1px 0 0 red, -1px 0 0 #0c33f5; filter: blur(0);}
+        64% { text-shadow: 1px 0 0 red, -1px 0 0 #0c33f5; filter: blur(0);}
+        65% { text-shadow: 1px 0 0 red, -1px 0 0 #0c33f5; filter: blur(0);}
+        66% { text-shadow: 1px 0 0 red, -1px 0 0 #0c33f5; filter: blur(0.5px);}
+        67% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0.5px);}
+        68% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        69% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        70% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        71% { text-shadow: 50px 0 0 red, -50px 0 0 #0c33f5; filter: blur(0);}
+        72% { text-shadow: 0 0 0 red, 0 0 0 #0c33f5; filter: blur(0);}
+        73% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        74% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        75% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        76% { text-shadow: 3px 0 0 red, -3px 0 0 #0c33f5; filter: blur(0);}
+        77% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        78% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        79% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        80% { text-shadow: -3px 0 0 red, 3px 0 0 #0c33f5; filter: blur(0);}
+        81% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        82% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0);}
+        83% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        84% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        85% { text-shadow: 1px 0 0 red, -1px 0 0 lime; filter: blur(0.5px);}
+        86% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0.5px);}
+        87% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0.5px);}
+        88% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        89% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        90% { text-shadow: -3px 0 0 red, 3px 0 0 lime; filter: blur(0);}
+        91% { text-shadow: 60px 0 0 lime, -60px 0 0 #0c33f5; filter: blur(0);}
+        92% { text-shadow: 0 0 0 lime, 0 0 0 #0c33f5; filter: blur(0);}
+        92% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        93% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        94% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        95% { text-shadow: 0.8px 0 0 #0c33f5, -0.8px 0 0 lime; filter: blur(0);}
+        96% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        97% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        98% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        99% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+        100% { text-shadow: -3px 0 0 #0c33f5, 3px 0 0 lime; filter: blur(0);}
+      }
+      .video-container video {
+        width: 100%;
+        height: auto;
+        max-width: 308px;
+        filter: brightness(1.2);
+      }
+      .links {
+        display: inline-block;
+        margin: 10px auto;
+        background: linear-gradient(
+          to right,
+          rgba(145, 206, 222, 0.9),
+          rgba(176, 217, 230, 0.9)
+        );
+        padding: 0 10px;
+        border-radius: 10px;
+        text-align: left;
+      }
+      .links p {
+        margin: 4px 0;
+      }
+      .small-note {
+        display: inline-block;
+        margin: 10px auto;
+        padding: 5px 10px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        color: #555;
+        text-align: center;
+        background: linear-gradient(
+          to right,
+          rgba(145, 206, 222, 0.9),
+          rgba(176, 217, 230, 0.9)
+        );
+      }
+      footer {
+        display: inline-block;
+        margin: auto calc(100% - 90dvw);
+        padding: 0 10px;
+        border-radius: 10px;
+        color: #777;
+        text-align: center;
+        background: linear-gradient(
+          to right,
+          rgba(145, 206, 222, 0.9),
+          rgba(176, 217, 230, 0.9)
+        );
+      }
+      footer p {
+        font-family: Courier New, monospace;
+        font-size: 0.8em;
+        white-space: pre-line;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Welcome</h1>
+
+      <div class="notice" id="warningNotice">
+        <div class="warning-title">
+          <span>&#x26A0;&#xFE0F;</span>
+          <span>Warning:</span>
+        </div>
+
+        <p>
+          After finishing configuration<br><strong>disconnect from this Wi-Fi network</strong>.<br>
+          Keeping this network connected may<br>keep the ESP32 powered and drain<br>your car battery.
+        </p>
+
+        <div class="action-row">
+          <div class="checkbox">
+            <input type="checkbox" id="understood">
+            <label for="understood">Understood</label>
+          </div>
+          <button type="button" id="enterBtn">Connect</button>
+        </div>
+      </div>
+
+      <div class="video-heading">
+        Lowering so smooth, even your mom’s got swagger!
+      </div>
+
+      <div class="video-container">
+        <video id="ad" src="video.webm" muted autoplay loop controls playsinline></video>
+      </div>
+
+      <div class="links">
+        <p><span>AIRmatic Suspension Setup</span><br><a href="http://192.168.4.1/config" target="_blank">http://192.168.4.1/config</a></p>
+        <p><span>ESP32 Wi-Fi Settings</span><br><a href="http://192.168.4.1/settings">http://192.168.4.1/settings</a></p>
+        <p><span>ElegantOTA Firmware Update</span><br><a href="http://192.168.4.1/update" target="_blank">http://192.168.4.1/update</a></p>
+      </div>
+
+      <p class="small-note">
+        Trouble connecting?<br>Try disabling cellular data
+      </p>
+
+      <footer>
+        <p>full source code available at -> github.com/aiecxs/w211-airmatic</p>
+      </footer>
+    </div>
+
+    <script>
+      const enterBtn = document.getElementById('enterBtn');
+      enterBtn.addEventListener('click', authorize);
+      document.addEventListener('keydown', e => {
+        if(e.key === 'Enter') authorize();
+      });
+
+      function startSession() {
+        const warningNotice = document.getElementById('warningNotice');
+        const videoContainer = document.querySelector('.video-container');
+        const heading = document.querySelector('.video-heading');
+        const video = document.getElementById('ad');
+
+        // Hide popup if already authorized this session
+        if(sessionStorage.getItem('authorized') === 'true'){
+          warningNotice.style.display = 'none';
+          heading.style.display = 'inline-block';
+          videoContainer.style.display = 'flex';
+          video.playbackRate = 0.75;
+          video.muted = false;
+        }
+      }
+
+      function authorize() {
+        const understood = document.getElementById('understood');
+        if (!understood.checked) {
+          understood.classList.add('blink');
+          setTimeout(() => understood.classList.remove('blink'), 800);
+          return;
+        }
+        fetch('/authorized')
+          .then(() => {
+            sessionStorage.setItem('authorized', 'true');
+            window.location.href = '/';
+          })
+          .catch(() => alert("Connection failed. Try again."));
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        startSession();
+      });
+    </script>
+  </body>
+</html>

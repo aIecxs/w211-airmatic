@@ -20,15 +20,26 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTA.h>
+#include <DNSServer.h>
+#include <map>
+#include "crypto.h"
 
 // BEWARE: Important! Change WiFi password here!
-const char* ssid = "Mercedes-Benz";
-const char* password = "12345678";
+uint8_t ssid[33] = "Mercedes-Benz";
+uint8_t password[33] = "12345678";
+String hash;
+String seed;
+String salt;
 
+uint8_t update = 1;
+bool rebootPending = false;
+unsigned long rebootTime = 0;
+unsigned long ota_progress_millis = 0;
+
+DNSServer dnsServer;
 AsyncWebServer server(80);
 
-unsigned long ota_progress_millis = 0;
-uint8_t update = 1;
+std::map<IPAddress, bool> authorizedClients;
 
 void onOTAStart() {
   // Log when OTA has started
@@ -54,6 +65,56 @@ void onOTAEnd(bool success) {
   // <Add your own code here>
 }
 
+
+// redirects all unmatched AsyncWebServer requests
+class CaptiveRequestHandler : public AsyncWebHandler {
+public:
+  bool canHandle(AsyncWebServerRequest *request) { return true; }
+  void handleRequest(AsyncWebServerRequest *request) {
+    request->redirect("/");
+  }
+};
+
+
+// read IP from client list
+bool isAuthorized(AsyncWebServerRequest *req) {
+  IPAddress ip = req->client()->remoteIP();
+  auto it = authorizedClients.find(ip);
+  return (it != authorizedClients.end() && it->second);
+}
+
+
+// write IP to client list
+void setAuthorized(AsyncWebServerRequest *req, bool state) {
+  IPAddress ip = req->client()->remoteIP();
+  authorizedClients[ip] = state;
+}
+
+
+// schedule reboot
+void scheduleReboot(unsigned long delayMs) {
+  rebootPending = true;
+  rebootTime = millis() + delayMs;
+  Serial.println("rebooting...");
+}
+
+
+// perform reboot
+void handleReboot() {
+  if (rebootPending && (long)(millis() - rebootTime) > 0) {
+    rebootPending = false;
+    dnsServer.stop();
+    server.end();
+    authorizedClients.clear();
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    delay(200);
+    ESP.restart();
+  }
+}
+
+
+// MIME content type based on file name suffix
 String getContentType(String filename) {
   if (filename.endsWith(".html")) return "text/html";
   if (filename.endsWith(".css")) return "text/css";
@@ -62,11 +123,17 @@ String getContentType(String filename) {
   if (filename.endsWith(".png")) return "image/png";
   if (filename.endsWith(".jpg")) return "image/jpeg";
   if (filename.endsWith(".ico")) return "image/x-icon";
+  if (filename.endsWith(".pem")) return "application/x-x509-ca-cert";
+  if (filename.endsWith(".crt")) return "application/x-x509-ca-cert";
+  if (filename.endsWith(".key")) return "application/octet-stream";
+  if (filename.endsWith(".webm")) return "video/webm";
+  if (filename.endsWith(".mp4")) return "video/mp4";
   return "text/plain";
 }
 
+// write data -> into configJson bidirectional transport JSON string processed by HTML client
 void updateJson() {
-  StaticJsonDocument<512> doc;
+  DynamicJsonDocument doc(1024);
   DeserializationError err = deserializeJson(doc, configJson);
   if (err) {
     Serial.print("Cannot deserialize the current JSON object: ");
@@ -88,11 +155,16 @@ void updateJson() {
   level["fzgn_vr"] = FS_340h.FZGN_VR;
   level["fzgn_hl"] = FS_340h.FZGN_HL;
   level["fzgn_hr"] = FS_340h.FZGN_HR;
+  JsonObject w = doc.containsKey("wifi") ? doc["wifi"].as<JsonObject>() : doc.createNestedObject("wifi");
+  w["hash"].set(hash);
+  w["seed"].set(seed);
+  w["salt"].set(salt);
   serializeJson(doc, configJson);
 }
 
+// read data <- from configJson bidirectional transport JSON string processed by HTML client
 void readJson() {
-  StaticJsonDocument<512> doc;
+  DynamicJsonDocument doc(1024);
   DeserializationError err = deserializeJson(doc, configJson);
   if (err) {
     Serial.print("Cannot deserialize the current JSON object: ");
@@ -111,16 +183,25 @@ void readJson() {
     if (m.containsKey("offset_nv")) offset_nv = m["offset_nv"];
     if (m.containsKey("offset_nh")) offset_nh = m["offset_nh"];
   }
+  if (doc.containsKey("wifi")) {
+    JsonObject w = doc["wifi"];
+    if (w.containsKey("hash")) hash = w["hash"].as<String>();
+    if (w.containsKey("seed")) seed = w["seed"].as<String>();
+    if (w.containsKey("salt")) salt = w["salt"].as<String>();
+  }
   limitOffset(&offset_nv);
   limitOffset(&offset_nh);
 }
 
+// handle HTTP_POST actions
 void webConfig() {
+  // initial loading of configJson bidirectional transport JSON string
   if (update == 1) {
     getCalibration();
     updateJson();
     update = 0;
-  } 
+  }
+  // save PWM Voltage Calibration to LittleFS
   else if (update == 2) {
     readJson();
     updateCalibration("calib_vl", calib_vl);
@@ -129,35 +210,168 @@ void webConfig() {
     updateCalibration("calib_hr", calib_hr);
     update = 0;
   }
+  // receive axle level custom offset from HTML
   else if (update == 3) {
     readJson();
     update = 0;
   }
+  // save axle level custom offset to LittleFS
   else if (update == 4) {
     readJson();
     updateSettings(mode, "offset_nv", offset_nv);
     updateSettings(mode, "offset_nh", offset_nh);
     update = 0;
   }
+  // send wifi credentials
+  else if (update == 5) {
+    readJson();
+    cryptUpdateWifi();
+    updateJson();
+    update = 0;
+  }
+  // receive wifi credentials
+  else if (update == 6) {
+    readJson();
+    if(cryptGetWifi()) {
+      updateJson();
+      updateWifi(hash, seed);
+      scheduleReboot(5000);
+    }
+    update = 0;
+  }
 }
 
 void wifiSetup() {
+  WiFi.persistent(false);
+
+  // read wifi credentials from LittleFS
+  getWifi(hash, seed);
+  if (hash.length() < 32 || seed.length() < 32 || getMac(hw_key) != ESP_OK) {
+    Serial.println("No WiFi config found, starting default AP...");
+  } else {
+    memset(ssid, 0x00, sizeof(ssid));
+    memset(password, 0x00, sizeof(password));
+    hexToBytes(hash, enc_ssid);
+    hexToBytes(seed, enc_pass);
+    aes_decrypt(enc_ssid, hw_key, ssid, sizeof(enc_ssid), sizeof(hw_key));
+    aes_decrypt(enc_pass, hw_key, password, sizeof(enc_pass), sizeof(hw_key));
+    ssid[32] = '\0';
+    password[32] = '\0';
+  }
+
+  // wifi up
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(ssid, password);
+  WiFi.softAP((char *)ssid, (char *)password);
   Serial.print("IP address: ");
   Serial.println(WiFi.softAPIP());
   Serial.println("Access Point started");
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", 
-      "Hi! This is ElegantOTA. visit: http://192.168.4.1/update\n"
-      "AIRmatic Settings: http://192.168.4.1/config");
+  // fake DNS server
+  dnsServer.start(53, "*", WiFi.softAPIP());
+
+  // redirect captive portal detection endpoints
+  // *** wikipedia.org/wiki/Captive_portal ***
+  {
+    // Android / ChromeOS
+    server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(204, "text/plain", "");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+    server.on("/gen_204", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(204, "text/plain", "");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+
+    // Apple
+    server.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/html", "<html><head><title>Success</title></head><body>Success</body></html>");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+    server.on("/library/test/success.html", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/html", "<html><head><title>Success</title></head><body>Success</body></html>");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+
+    // Windows
+    server.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/plain", "Microsoft Connect Test");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+    server.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/plain", "Microsoft NCSI");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+
+    // Linux (GNOME / KDE / Firefox)
+    server.on("/check_network_status.txt", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/plain", "NetworkManager is online");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+    server.on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *req){
+      if (isAuthorized(req)) {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=https://support.mozilla.org/kb/captive-portal'/>");
+      } else {
+        req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+      }
+    });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *req){
+      // KDE probe comes to "/" with Host == "networkcheck.kde.org"
+      if (req->host() == String("networkcheck.kde.org")) {
+        if (isAuthorized(req)) {
+          req->send(200, "text/plain", "OK");
+        } else {
+          req->send(200, "text/html", "<meta http-equiv='refresh' content='0;url=/' />");
+        }
+        return;
+      }
+      // normal index for other hosts/clients
+      req->send(LittleFS, "/index.html", "text/html");
+    });
+  }
+
+  // captive check succeeded
+  server.on("/authorized", HTTP_GET, [](AsyncWebServerRequest *req){
+    setAuthorized(req, true);
+    req->send(204);
+  });
+
+  // wifi settings
+  server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *req){
+    req->send(LittleFS, "/settings.html", "text/html");
+  });
+
+  // generate RSA 2048-bit private.pem + public.pem key pair files
+  server.on(pubKeyFile, HTTP_GET, [](AsyncWebServerRequest *request) {
+    generateKeys();
+    request->send(LittleFS, pubKeyFile, "application/x-pem-file");
   });
 
   server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(LittleFS, "/config.html", "text/html");
   });
 
+  // receive instructions (update flag)
   server.on(
     "/config",
     HTTP_POST,
@@ -180,16 +394,25 @@ void wifiSetup() {
     }
   );
 
-  server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
+  // bidirectional transport JSON string processed by HTML client
+  server.on(config, HTTP_GET, [](AsyncWebServerRequest *request){
     updateJson();
     request->send(200, "application/json", configJson);
   });
 
+  // captive portal
+  server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
+
+  // file server
   server.onNotFound([](AsyncWebServerRequest* request) {
     String path = request->url();
     if (LittleFS.exists(path)) {
       String contentType = getContentType(path);
-      request->send(LittleFS, path, contentType);
+      AsyncWebServerResponse* response = request->beginResponse(LittleFS, path, contentType);
+      if (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".js") || path.endsWith(".webm") || path.endsWith(".mp4")) {
+        response->addHeader("Cache-Control", "public, max-age=31536000");
+      }
+      request->send(response);
     } else {
       request->send(404, "text/plain", "404: File not found");
     }
@@ -225,15 +448,19 @@ void wifiEvent(void *parameter) {
         wifi = false;
         wifiConnected = false;
         Serial.println("HTTP server stop");
-        server.end();
-        WiFi.softAPdisconnect(true);
-        WiFi.mode(WIFI_OFF);
+        dnsServer.stop();            // stop DNS redirection
+        server.end();                // stop HTTP server
+        authorizedClients.clear();   // reset client list
+        WiFi.softAPdisconnect(true); // disconnect AP and clients
+        WiFi.mode(WIFI_OFF);         // turn off WiFi hardware
         vTaskDelete(NULL);
       }
     }
     if (wifi) {
       ElegantOTA.loop();
       webConfig();
+      handleReboot();
+      dnsServer.processNextRequest();
     }
     delay(100);
   }
