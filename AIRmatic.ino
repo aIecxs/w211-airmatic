@@ -45,7 +45,7 @@
 #define EN  GPIO_NUM_22
 
 // Watchdog
-#define WO  GPIO_NUM_32 // TLE4271 Watchdog out
+#define WO GPIO_NUM_32 // TLE4271 Watchdog out
 
 // Enable Pin
 #define ON GPIO_NUM_4  // LM2902-N Sensor signal
@@ -216,11 +216,11 @@ void blinkTaskFunc(void *param) {
 }
 
 // Watchdog output pulse
-void startWatchdog(gpio_num_t wpin) {
-  const unsigned long wfreq = 1;    // 1 Hz
-  const unsigned char wres = 11;    // resolution 2048
-  const unsigned long wduty = 1024; // 50%
-  ledcAttach(wpin, wfreq, wres);
+void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
+  const unsigned char wchn = 8;  // Group 1, Channel 0, Timer 0
+  const unsigned char wres = 11; // resolution 2048
+  const unsigned long wduty = (1 << wres) / 2; // 50%
+  ledcAttachChannel(wpin, wfreq, wres, wchn);
   ledcWrite(wpin, wduty);
 }
 
@@ -385,7 +385,6 @@ void updateSettings(const String& mode, const String& offset, int8_t value) {
   saveConfig(doc);
 }
 
-
 // read wifi credentials from config.json file
 void getWifi(String &hash_old, String &seed_old) {
   JsonDocument doc = readConfig();
@@ -396,7 +395,6 @@ void getWifi(String &hash_old, String &seed_old) {
   if (obj.containsKey("hash")) hash_old = obj["hash"].as<String>();
   if (obj.containsKey("seed")) seed_old = obj["seed"].as<String>();
 }
-
 
 // write wifi credentials to config.json file
 void updateWifi(const String &hash_new, const String &seed_new) {
@@ -575,9 +573,8 @@ void setup() {
   pinMode(ON, OUTPUT);
   digitalWrite(ON, HIGH);
 
-  // Watchdog output
-  pinMode(WO, OUTPUT);
-  startWatchdog(WO); // 1 Hz
+  // Watchdog output 1 Hz
+  startWatchdog(WO, 1);
 
   // DAC offset voltage generator 4 kHz
   ledcAttach(PWM1, freq, res);
