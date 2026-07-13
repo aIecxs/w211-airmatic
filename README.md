@@ -67,6 +67,20 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
   
 **&#x26A0;&#xFE0F; `UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY` &#x26A0;&#xFE0F;**
 
+## Quick start Guide
+
+1. Download and Extract `esptool.exe` from Assets [esptool-windows-amd64.zip](https://github.com/espressif/esptool/releases/latest) into the same folder as these two files:
+   - [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin)
+   - [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin)
+2. Open Windows Command Prompt.
+3. Flash using this command:
+
+```
+esptool.exe --chip esp32 --port COM3 --baud 115200 write_flash --flash_mode dio --flash_freq 40m --flash_size detect 0x010000 AIRmatic.ino.bin 0x290000 AIRmatic.littlefs.bin
+```
+For full instructions refer to [Installation](README.md#installation) Guide.
+
+---
 
   **Offset Voltage**
 
