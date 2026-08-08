@@ -69,17 +69,19 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 
 ## Quick start Guide
 
-1. Download and Extract `esptool.exe` from Assets [esptool-windows-amd64.zip](https://github.com/espressif/esptool/releases/latest) into the same folder as these five files:
+1. Download and Extract `esptool.exe` from Assets [esptool-windows-amd64.zip](https://github.com/espressif/esptool/releases/latest) into the same folder as these six files:
+   - [gen_esp32part.exe](https://github.com/espressif/arduino-esp32/raw/refs/tags/3.3.11/tools/gen_esp32part.exe)
+   - [default.csv](https://github.com/espressif/arduino-esp32/blob/3.3.11/tools/partitions/default.csv?plain=1)
    - [bootloader_dio_40m.bin](https://github.com/espressif/arduino-esp32/raw/5b61930/tools/sdk/esp32/bin/bootloader_dio_40m.bin)
-   - [default.bin](https://github.com/espressif/arduino-esp32/raw/5b61930/tools/partitions/default.bin)
-   - [boot_app0.bin](https://github.com/espressif/arduino-esp32/raw/5b61930/tools/partitions/boot_app0.bin)
+   - [boot_app0.bin](https://github.com/espressif/arduino-esp32/raw/refs/tags/3.3.11/tools/partitions/boot_app0.bin)
    - [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin)
    - [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin)
-2. Open Windows Command Prompt.
-3. Flash using this command:
+3. Open Windows Command Prompt. `cd` into the Folder.
+4. Flash using this commands:
 
 ```
-esptool.exe --chip esp32 --port COM3 --baud 921600 write_flash --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 bootloader_dio_40m.bin 0x8000 default.bin 0xE000 boot_app0.bin 0x10000 AIRmatic.ino.bin 0x290000 AIRmatic.littlefs.bin
+gen_esp32part.exe default.csv default.bin
+esptool.exe --chip esp32 --port COM3 --baud 921600 write-flash --flash-mode dio --flash-freq 40m --flash-size detect 0x1000 bootloader_dio_40m.bin 0x8000 default.bin 0xE000 boot_app0.bin 0x10000 AIRmatic.ino.bin 0x290000 AIRmatic.littlefs.bin
 ```
 For full instructions refer to [Installation](README.md#installation) Guide.
 
