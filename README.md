@@ -199,7 +199,7 @@ The printed circuit board (PCB) layout for this project was created using the **
 
 With kind permission of **IBF Electronic** – www.target3001.com
 
-![pcb_old.jpg](pcb_old.jpg)
+![pcb_new.jpg](pcb_new.jpg)
 
 Download full schematic and PCB [LM2902N.T3001](XGerber.zip)
 
