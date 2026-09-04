@@ -197,7 +197,7 @@ For full instructions refer to [Installation](README.md#installation) Guide.
 
 The printed circuit board (PCB) layout for this project was created using the **Maker Edition of TARGET 3001!** generously provided for non-commercial DIY use.
 
-With kind permission of **IBF Electronic** – www.target3001.com
+With kind permission of **IBF Electronic** – [www.target3001.com](https://ibfriedrich.com/landingpage/make/en)
 
 ![pcb_new.jpg](pcb_new.jpg)
 
@@ -291,7 +291,9 @@ To compile and upload the firmware to your ESP32, follow these steps:
   Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module. For AIRmatic mode selection from center console (CAN C) is splitted from ECU. For Steering wheel buttons (CAN B) second CAN bus module with 16 MHz Crystal Oscillator is required.
 
 - **Connect MCU to PCB:**  
-  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L34) for pins)
+  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L34) for pins)  
+  Note: on the new Rev of the PCB the MCU can plugged in socket headers straight on PCB  
+  select MCU Board with solder jumpers on the back (NodeMCU-32S or DevKit)
 
 ---
 
