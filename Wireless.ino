@@ -23,6 +23,7 @@
 #include <DNSServer.h>
 #include <map>
 #include "crypt.h"
+#include <rtc_wdt.h>
 
 // BEWARE: Important! Change WiFi password here!
 uint8_t ssid[33] = "Mercedes-Benz";
@@ -107,8 +108,14 @@ void handleReboot() {
     server.end();
     authorizedClients.clear();
     WiFi.mode(WIFI_OFF);
+    rtc_wdt_protect_off();
+    rtc_wdt_disable();
+    rtc_wdt_set_length_of_reset_signal(RTC_WDT_SYS_RESET_SIG, RTC_WDT_LENGTH_3_2us);
+    rtc_wdt_set_stage(RTC_WDT_STAGE0, RTC_WDT_STAGE_ACTION_RESET_RTC);
+    rtc_wdt_set_time(RTC_WDT_STAGE0, 200);
+    rtc_wdt_enable();
+    rtc_wdt_protect_on();
     delay(200);
-    ESP.restart();
   }
 }
 
@@ -362,7 +369,7 @@ void wifiSetup() {
 
   // generate RSA 2048-bit private.pem + public.pem key pair files
   server.on(pubKeyFile, HTTP_GET, [](AsyncWebServerRequest *request) {
-    generateKeys();
+    generateKeysTask();
     request->send(LittleFS, pubKeyFile, "application/x-pem-file");
   });
 

@@ -6,7 +6,7 @@
  * mbed-tls.readthedocs.io/en/latest/kb/how-to/encrypt-and-decrypt-with-rsa *
  *                                                                          *
  *                                                                          */
-#include "crypto.h"
+#include "crypt.h"
 
 uint8_t enc_ssid[32];
 uint8_t enc_pass[32];
@@ -19,6 +19,7 @@ size_t fwKeyLen;
 size_t seedLen;
 
 bool rsaKeys = false;
+TaskHandle_t cryptTask = nullptr;
 
 
 // read MAC from eFuse
@@ -277,15 +278,15 @@ void generateKeys() {
     }
 
     // disable watchdog for this task
-    esp_task_wdt_delete(NULL);
+    disableLoopWDT();
 
     if (mbedtls_rsa_gen_key(mbedtls_pk_rsa(pk), mbedtls_ctr_drbg_random, &ctr_drbg, 2048, 65537) != 0) {
       Serial.println("RSA key generation failed");
-      esp_task_wdt_add(NULL);  // re-enable before returning
+      enableLoopWDT();  // re-enable before returning
       return;
     }
     // re-enable watchdog
-    esp_task_wdt_add(NULL);
+    enableLoopWDT();
 
     // write private key to PEM
     unsigned char privPem[1792];
@@ -315,6 +316,28 @@ void generateKeys() {
   }
 
   rsaKeys = true;
+}
+
+
+void cryptoTask(void *pvParameters) {
+  generateKeys();
+  cryptTask = nullptr;
+  vTaskDelete(NULL);
+}
+
+
+void generateKeysTask() {
+  if (cryptTask != nullptr) {
+    return;
+  }
+  xTaskCreatePinnedToCore(
+    cryptoTask,    // Task function.
+    "Crypto Task", // name of task.
+    8192,          // Stack size of task
+    NULL,          // parameter of the task
+    2,             // priority of the task
+    &cryptTask,    // Task handle to keep track of created task
+    1);            // pin task to core 1
 }
 
 

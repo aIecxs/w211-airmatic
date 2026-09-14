@@ -5,13 +5,14 @@
  * - @aIecxs
  * 
  * Credits:
- * - ArduinoJson (https://github.com/bblanchon/ArduinoJson)
- * - ElegantOTA (https://github.com/ayushsharma82/ElegantOTA)
- * - ESPAsyncWebServer (https://github.com/ESPAsync/ESPAsyncWebServer)
- * - AsyncTCP (https://github.com/ESPAsync/AsyncTCP)
- * - MCP2515 Arduino Library (https://github.com/autowp/arduino-mcp2515)
- * - CAN Bus reverse engineering by @rnd-ash (https://github.com/rnd-ash/mb-w211-pc)
- * - The Mbed TLS Contributors @adeaarm, @paul-elliott-arm (https://github.com/Mbed-TLS)
+ * - ArduinoJson (github.com/bblanchon/ArduinoJson)
+ * - ElegantOTA (github.com/ayushsharma82/ElegantOTA)
+ * - ESPAsyncWebServer (github.com/ESPAsync/ESPAsyncWebServer)
+ * - AsyncTCP (github.com/ESPAsync/AsyncTCP)
+ * - MCP2515 Arduino Library (github.com/autowp/arduino-mcp2515)
+ * - CAN Bus reverse engineering by @rnd-ash (github.com/rnd-ash/mb-w211-pc)
+ * - The Mbed TLS Contributors @adeaarm, @paul-elliott-arm (github.com/Mbed-TLS)
+ * - Mbed TLS v3 legacy layer by @david-cermak (github.com/david-cermak/mbedtls_v3_shim)
  * 
  * Licensed under the MIT License.
  * Third-party libraries licensed under the LGPL-2.1 License, Apache-2.0 OR GPL-2.0-or-later
@@ -102,8 +103,8 @@ struct can_frame canMsg0;
 struct can_frame canMsg1;
 
 // Chip select
-MCP2515 Can0(CS0); // CS -> GPIO5
-MCP2515 Can1(CS1); // CS -> GPIO15
+MCP2515* Can0 = nullptr; // CS -> GPIO5
+MCP2515* Can1 = nullptr; // CS -> GPIO15
 
 // PWM default value
 const int freq = 4000; // 4 kHz
@@ -140,6 +141,7 @@ TaskHandle_t wifiTask;
 
 TaskHandle_t blinkTask;
 QueueHandle_t blinkQueue;
+
 
 // import CAN_message into bit field decoder
 void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
@@ -217,10 +219,11 @@ void blinkTaskFunc(void *param) {
 
 // Watchdog output pulse
 void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
-  const unsigned char wchn = 8;  // Group 1, Channel 0, Timer 0
-  const unsigned char wres = 11; // resolution 2048
-  const unsigned long wduty = (1 << wres) / 2; // 50%
+  const unsigned char wchn = 8;  // Group 1, Channel 0 (LEDC_LOW_SPEED_MODE)
+  const unsigned char wres = 10; // resolution 1024
+  const unsigned long wduty = 1UL << (wres - 1); // 50%
   ledcAttachChannel(wpin, wfreq, wres, wchn);
+  delay(1000);
   ledcWrite(wpin, wduty);
 }
 
@@ -463,7 +466,6 @@ void awake(unsigned int delayMs) {
   }
 }
 
-
 void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -483,39 +485,42 @@ void setup() {
   digitalWrite(EN, HIGH);
   digitalWrite(STB, HIGH);
 
-  Can0.reset();
-  Can1.reset();
+  Can0 = new MCP2515(CS0); // CS -> GPIO5
+  Can1 = new MCP2515(CS1); // CS -> GPIO15
+
+  Can0->reset();
+  Can1->reset();
   delay_us(1000);
 
-  Can0.setBitrate(CAN_500KBPS, MCP_8MHZ); // Motor CAN-C High speed
-  Can1.setBitrate(CAN_83K3BPS, MCP_16MHZ); // Interior CAN-B Low speed
+  Can0->setBitrate(CAN_500KBPS, MCP_8MHZ); // Motor CAN-C High speed
+  Can1->setBitrate(CAN_83K3BPS, MCP_16MHZ); // Interior CAN-B Low speed
 
   // Filters for Receive Buffer RXB0 (uses MASK0, filters RXF0 and RXF1)
-  Can0.setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
-  Can0.setFilter(MCP2515::RXF0, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
-  Can0.setFilter(MCP2515::RXF1, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+  Can0->setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
+  Can0->setFilter(MCP2515::RXF0, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+  Can0->setFilter(MCP2515::RXF1, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
 
   // Filters for Receive Buffer RXB1 (uses MASK1, filters RXF2 to RXF5)
-  Can0.setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
-  Can0.setFilter(MCP2515::RXF2, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
-  Can0.setFilter(MCP2515::RXF3, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+  Can0->setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
+  Can0->setFilter(MCP2515::RXF2, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+  Can0->setFilter(MCP2515::RXF3, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
 
   // Filters for Receive Buffer RXB0 (uses MASK0, filters RXF0 and RXF1)
-  Can1.setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
-  Can1.setFilter(MCP2515::RXF0, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
-  Can1.setFilter(MCP2515::RXF1, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+  Can1->setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
+  Can1->setFilter(MCP2515::RXF0, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
+  Can1->setFilter(MCP2515::RXF1, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
   // Filters for Receive Buffer RXB1 (uses MASK1, filters RXF2 to RXF5)
-  Can1.setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
-  Can1.setFilter(MCP2515::RXF2, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
-  Can1.setFilter(MCP2515::RXF3, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+  Can1->setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
+  Can1->setFilter(MCP2515::RXF2, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
+  Can1->setFilter(MCP2515::RXF3, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
-  if (Can0.setListenOnlyMode() == MCP2515::ERROR_OK) {
+  if (Can0->setListenOnlyMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
   } else {
     Serial.println("WARNING: MCP2515 not initialized");
   }
-  if (Can1.setListenOnlyMode() == MCP2515::ERROR_OK) {
+  if (Can1->setListenOnlyMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
   } else {
     Serial.println("WARNING: MCP2515 not initialized");
@@ -554,7 +559,7 @@ void setup() {
   xTaskCreate(
     wifiEvent,     // Task function
     "WiFi Event",  // name of task
-    4096,          // Stack size of task
+    16384,         // Stack size of task
     NULL,          // parameter of the task
     1,             // priority of the task
     &wifiTask);    // Task handle to keep track of created task

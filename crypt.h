@@ -6,14 +6,16 @@
  * mbed-tls.readthedocs.io/en/latest/kb/how-to/encrypt-and-decrypt-with-rsa *
  *                                                                          *
  *                                                                          */
-#ifndef CRYPTO_H
-#define CRYPTO_H
+#ifndef AIRMATIC_CRYPT_H
+#define AIRMATIC_CRYPT_H
 
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 4
+#include <mbedtls_v3_shim.h>
+#endif
 
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_mac.h>
-#include <esp_task_wdt.h>
 #include <mbedtls/base64.h>
 #include <mbedtls/aes.h>
 #include <mbedtls/pk.h>
@@ -46,6 +48,8 @@ void aes_decrypt(uint8_t *chipherText, uint8_t *key, uint8_t *outputBuffer, size
 
 // generate RSA 2048-bit private.pem + public.pem key pair files
 void generateKeys();
+void cryptoTask(void *pvParameters);
+void generateKeysTask();
 
 // send wifi credentials to HTML client
 void cryptUpdateWifi();
@@ -76,4 +80,4 @@ bool handshake(const uint8_t *a, size_t size_a, const uint8_t *b, size_t size_b)
 */
 
 
-#endif /* CRYPTO_H */
+#endif /* AIRMATIC_CRYPT_H */
