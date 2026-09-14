@@ -22,7 +22,7 @@
 #include <ElegantOTA.h>
 #include <DNSServer.h>
 #include <map>
-#include "crypto.h"
+#include "crypt.h"
 
 // BEWARE: Important! Change WiFi password here!
 uint8_t ssid[33] = "Mercedes-Benz";
@@ -106,7 +106,6 @@ void handleReboot() {
     dnsServer.stop();
     server.end();
     authorizedClients.clear();
-    WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_OFF);
     delay(200);
     ESP.restart();
@@ -459,8 +458,8 @@ void wifiEvent(void *parameter) {
     if (wifi) {
       ElegantOTA.loop();
       webConfig();
-      handleReboot();
       dnsServer.processNextRequest();
+      handleReboot();
     }
     delay(100);
   }
