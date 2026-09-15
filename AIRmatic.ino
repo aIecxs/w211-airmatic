@@ -181,15 +181,12 @@ class delayMicrosec {
     delayMicrosec() : timer(nullptr), task(nullptr) {}
     void wait(uint32_t us) {
       task = xTaskGetCurrentTaskHandle();
+      xTaskNotifyStateClear(nullptr);
       if (!timer) {
         esp_timer_create_args_t args = {
           .callback = [](void* arg) {
             delayMicrosec* self = static_cast<delayMicrosec*>(arg);
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            vTaskNotifyGiveFromISR(self->task, &xHigherPriorityTaskWoken);
-            if (xHigherPriorityTaskWoken) {
-              portYIELD_FROM_ISR();
-            }
+            xTaskNotifyGive(self->task);
           },
           .arg = this,
           .dispatch_method = ESP_TIMER_TASK,
@@ -222,9 +219,9 @@ void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
   const unsigned char wchn = 8;  // Group 1, Channel 0 (LEDC_LOW_SPEED_MODE)
   const unsigned char wres = 10; // resolution 1024
   const unsigned long wduty = 1UL << (wres - 1); // 50%
-  ledcAttachChannel(wpin, wfreq, wres, wchn);
-  delay(1000);
+  ledcAttachChannel(wpin, 1000, wres, wchn);
   ledcWrite(wpin, wduty);
+  ledcChangeFrequency(wpin, wfreq, wres);
 }
 
 // blink function
@@ -741,24 +738,20 @@ void loop() {
   }
 
   // DAC offset voltage output
-  ledcWrite(PWM1, duty + calib_vl + offset_nv * factor); // NVLS1
-  ledcWrite(PWM2, duty + calib_vr - offset_nv * factor); // NVRS1 / inverted, requires negative offset
-  ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
-//  ledcWrite(PWM4, duty + calib_hl + offset_nh * factor); // NHLS1 / not available for 211/219
+  if ( millis() - timeMs > 500 ) {
+    timeMs = millis();
+    ledcWrite(PWM1, duty + calib_vl + offset_nv * factor); // NVLS1
+    ledcWrite(PWM2, duty + calib_vr - offset_nv * factor); // NVRS1 / inverted, requires negative offset
+    ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
+    ledcWrite(PWM4, duty + calib_hl - offset_nh * factor); // NHLS1 / not available for 211/219
+  }
 
   // put TJA1055 into go-to-sleep / TJA1055 does the rest and will switch off TLE4271 automatically
   go_to_sleep(10000); // 10 sec
 
-  // Watchdog output pulse
-  if ( millis() - timeMs > 500 ) {
-    timeMs = millis();
-// from startWatchdog()
-//    digitalWrite(WO, !digitalRead(WO));
-  }
-
   // reset ESP32 once a week
   if (timeMs > 600000000) {
-    ESP.restart();
+    scheduleReboot(5000);
   }
   delay(10);
 }
