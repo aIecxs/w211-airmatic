@@ -85,6 +85,12 @@ class delayMicrosec;
   static delayMicrosec CONCAT(delay_us_, n); \
   CONCAT(delay_us_, n).wait(us)
 
+typedef struct {
+  gpio_num_t pin;
+  unsigned long freq;
+  unsigned char res;
+} wd_ctx_t;
+
 struct BlinkCmd {
   gpio_num_t pin;
   unsigned int ontime;
@@ -130,6 +136,8 @@ volatile bool canDown = true;
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
 
+static volatile int32_t wd_counter;
+portMUX_TYPE mux_wd = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_can0 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_can1 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_awake = portMUX_INITIALIZER_UNLOCKED;
@@ -175,11 +183,15 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
 // non-blocking delayMicroseconds()
 class delayMicrosec {
   private:
+    static constexpr uint32_t OVERHEAD_OFFSET = 40;
+    static constexpr uint32_t MIN_THRESHOLD   = 50;
     esp_timer_handle_t timer;
     TaskHandle_t task;
   public:
     delayMicrosec() : timer(nullptr), task(nullptr) {}
     void wait(uint32_t us) {
+      const uint32_t clamped = (us < MIN_THRESHOLD) ? MIN_THRESHOLD : us;
+      const uint32_t adjusted = clamped - OVERHEAD_OFFSET;
       task = xTaskGetCurrentTaskHandle();
       xTaskNotifyStateClear(nullptr);
       if (!timer) {
@@ -194,7 +206,8 @@ class delayMicrosec {
         };
         esp_timer_create(&args, &timer);
       }
-      esp_timer_start_once(timer, us);
+      esp_timer_start_once(timer, adjusted);
+      taskYIELD();
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
 };
@@ -214,14 +227,68 @@ void blinkTaskFunc(void *param) {
   }
 }
 
+// Watchdog output control timer callback
+static void stopWatchdog(void *arg) {
+
+  // read args passed from startWatchdog()
+  wd_ctx_t *ctx = (wd_ctx_t*)arg;
+  static bool last_active = true;
+
+  // decrease timeout counter
+  portENTER_CRITICAL(&mux_wd);
+  bool active = (wd_counter > 0);
+  if (active) {
+	  wd_counter--;
+  }
+  portEXIT_CRITICAL(&mux_wd);
+
+  // on timeout: stop watchdog (duty cycle = 0)
+  if (active != last_active) {
+    ledcWrite(ctx->pin, active ? (1UL << (ctx->res - 1)) : 0);
+    last_active = active;
+  }
+}
+
+// reset watchdog: requires counter = time (sec) × freq (Hz)
+void feedWatchdog(unsigned long amount) {
+  portENTER_CRITICAL(&mux_wd);
+  wd_counter = (int32_t)amount;
+  portEXIT_CRITICAL(&mux_wd);
+}
+
 // Watchdog output pulse
 void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
+
+  static constexpr uint32_t WATCHDOG_TIMEOUT = 30; // seconds
+  static esp_timer_handle_t wd_timer = NULL;
+  if (wd_timer != NULL) return; // already initialized
+
   const unsigned char wchn = 8;  // Group 1, Channel 0 (LEDC_LOW_SPEED_MODE)
   const unsigned char wres = 10; // resolution 1024
   const unsigned long wduty = 1UL << (wres - 1); // 50%
   ledcAttachChannel(wpin, 1000, wres, wchn);
   ledcWrite(wpin, wduty);
   ledcChangeFrequency(wpin, wfreq, wres);
+
+  // initial feed watchdog
+  feedWatchdog(WATCHDOG_TIMEOUT * wfreq);
+
+  // args passed by pointer to the callback
+  static wd_ctx_t ctx;
+  ctx.pin  = wpin;
+  ctx.freq = wfreq;
+  ctx.res  = wres;
+
+  // start the watchdog output control timer callback
+  const esp_timer_create_args_t targs = {
+    .callback = &stopWatchdog,
+    .arg = &ctx,
+    .dispatch_method = ESP_TIMER_TASK,
+    .name = "wd_gate",
+    .skip_unhandled_events = true
+  };
+  esp_timer_create(&targs, &wd_timer);
+  esp_timer_start_periodic(wd_timer, 1000000ULL / wfreq);
 }
 
 // blink function
@@ -744,6 +811,8 @@ void loop() {
     ledcWrite(PWM2, duty + calib_vr - offset_nv * factor); // NVRS1 / inverted, requires negative offset
     ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
     ledcWrite(PWM4, duty + calib_hl - offset_nh * factor); // NHLS1 / not available for 211/219
+
+    feedWatchdog(60); // 30 sec
   }
 
   // put TJA1055 into go-to-sleep / TJA1055 does the rest and will switch off TLE4271 automatically
