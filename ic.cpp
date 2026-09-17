@@ -1,6 +1,6 @@
 #include "ic.h"
-#include "debug.h"
-#include "avr/pgmspace.h"
+
+
 
 // Width of different ASCII Codes when the IC Renders them
 const uint8_t ASCII_WIDTHS[256] PROGMEM = {

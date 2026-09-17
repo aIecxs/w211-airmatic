@@ -26,6 +26,7 @@
 #include "w211_can_c.h"
 #include "w211_can_b.h"
 #include "crypt.h"
+#include "ic.h"
 
 // reserved
 #define LED_BUILTIN GPIO_NUM_2
@@ -61,14 +62,16 @@
 #define PWM4 GPIO_NUM_27 // NHLS1
 
 // CAN IDs Motor CAN-C
-#define CANID_0 0x0240 // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
-#define CANID_1 0x0340 // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+#define CANID0 0x0248 // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
+#define CANID1 0x0340 // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+#define CANID4 0x0240 // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+#define CANID5 0x0608 // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
 
 // CAN IDs Interior CAN-B
-#define CANID_2 0x01CA // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
-#define CANID_3 0x001A // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+#define CANID2 0x01CA // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
+#define CANID3 0x001A // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
-// copy CAN_message into bit field decoder
+// copy CAN message into bit field decoder
 #define copyMsg(ptr) importMsg(#ptr, ptr, sizeof(*(ptr)), id, msg, len)
 
 // helper macros for creating unique variable names
@@ -85,6 +88,16 @@ class delayMicrosec;
   static delayMicrosec CONCAT(delay_us_, n); \
   CONCAT(delay_us_, n).wait(us)
 
+
+#define MAILBOX_CAPACITY 16
+typedef struct {
+  struct can_frame frames[MAILBOX_CAPACITY];
+  uint8_t head;
+  uint8_t tail;
+  uint8_t count;
+  unsigned long timestamp;
+} mbx_t;
+
 typedef struct {
   gpio_num_t pin;
   unsigned long freq;
@@ -97,16 +110,21 @@ struct BlinkCmd {
 };
 
 // CAN Frames Motor CAN-C
-struct EZS_240h_t EZS_240h; // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+struct ZGW_248h_t ZGW_248h; // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
 struct FS_340h_t FS_340h;   // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+struct EZS_240h_t EZS_240h; // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+struct MS_608h_t MS_608h;   // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
 
 // CAN Frames Interior CAN-B
 struct KOMBI_A5_t KOMBI_A5; // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 struct UBF_A1_t UBF_A1;     // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
 // CAN message buffer
-struct can_frame canMsg0;
-struct can_frame canMsg1;
+struct can_frame canMsg[4];
+
+// send mailbox queue
+static mbx_t mbox0 = {}; // Can0
+static mbx_t mbox1 = {}; // Can1
 
 // Chip select
 MCP2515* Can0 = nullptr; // CS -> GPIO5
@@ -121,7 +139,13 @@ int8_t calib_vr = 0; // NVRS1 calibration
 int8_t calib_hr = 0; // NHRS1 calibration
 int8_t calib_hl = 0; // NHLS1 calibration
 
+// AIRmatic mode control buttons
+uint8_t st2_bet = 0; // DESC: ST2_BET - LF/ABC 2-position switch actuated
+uint8_t st3_bet = 0; // DESC: ST3_BET - LF/ABC 3-position switch operated
+
+volatile bool jsonBusy = false;
 String configJson;
+String fzgcod;
 String mode = "default";
 const char* config = "/config.json";
 int8_t offset_nv = 0; // mm front axle level custom offset
@@ -142,6 +166,9 @@ portMUX_TYPE mux_can0 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_can1 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_awake = portMUX_INITIALIZER_UNLOCKED;
 
+StaticSemaphore_t spiMutexBuffer;
+SemaphoreHandle_t spiMutex;
+
 TaskHandle_t canTask0; // Motor CAN-C
 TaskHandle_t canTask1; // Interior CAN-B
 
@@ -151,7 +178,7 @@ TaskHandle_t blinkTask;
 QueueHandle_t blinkQueue;
 
 
-// import CAN_message into bit field decoder
+// import CAN message into bit field decoder
 void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
   if (len <= destSize) {
     memcpy(dest, msg, len);
@@ -161,21 +188,32 @@ void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, c
   }
 }
 
-// export CAN_message into bit field decoder
+// export CAN message into bit field decoder
 void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
 {
   switch(id) {
-    case CANID_0:
-      copyMsg(&EZS_240h); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+    case CANID0:
+      copyMsg(&ZGW_248h); // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
       break;
-    case CANID_1:
-      copyMsg(&FS_340h); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+    case CANID1:
+      copyMsg(&FS_340h);  // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
       break;
-    case CANID_2:
+    case CANID2:
       copyMsg(&KOMBI_A5); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
       break;
-    case CANID_3:
-      copyMsg(&UBF_A1); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+    case CANID3:
+      copyMsg(&UBF_A1);   // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+      break;
+    case CANID4:
+      copyMsg(&EZS_240h); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+      break;
+    case CANID5:
+      copyMsg(&MS_608h);  // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
+/*
+      MS_608h.FCOD_MOT =
+        (MS_608h.FCOD_MOT0 & 0x3F) | // Vehicle code engine 7Bit, Bit0-5 (Bit6 -> Signal FCOD_MOT6)
+        (MS_608h.FCOD_MOT6 << 6);    // Vehicle code engine with 7 bits, bit 6
+*/
       break;
   }
 }
@@ -252,14 +290,17 @@ static void stopWatchdog(void *arg) {
 // reset watchdog: requires counter = time (sec) × freq (Hz)
 void feedWatchdog(unsigned long amount) {
   portENTER_CRITICAL(&mux_wd);
-  wd_counter = (int32_t)amount;
+  wd_counter = wd_counter > static_cast<int32_t>(amount)
+             ? wd_counter
+             : static_cast<int32_t>(amount);
   portEXIT_CRITICAL(&mux_wd);
 }
+
 
 // Watchdog output pulse
 void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
 
-  static constexpr uint32_t WATCHDOG_TIMEOUT = 30; // seconds
+  static constexpr uint32_t WATCHDOG_TIMEOUT = 10; // seconds
   static esp_timer_handle_t wd_timer = NULL;
   if (wd_timer != NULL) return; // already initialized
 
@@ -367,26 +408,64 @@ void limitOffset(int8_t* off) {
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
 }
 
+// write AIRmatic mode to CAN bus
+void updateMode() {
+  if (st2_bet || st3_bet) {
+    // do not distract ESP with CAN message replay
+    if (!( ZGW_248h.BN_NTLF   ||
+           ZGW_248h.ESP_BET   ||
+           ZGW_248h.PTS_BET   ||
+           ZGW_248h.CRASH     ||
+           ZGW_248h.CRASH_CNF ||
+           ZGW_248h.X_CRASH      )) {
+      if (st2_bet) {
+        ZGW_248h.ST2_BET = st2_bet & 0x03; // DESC: ST2_BET - LF/ABC 2-position switch actuated
+        st2_bet = 0;
+      }
+      if (st3_bet) {
+        ZGW_248h.ST3_BET = st3_bet & 0x03; // DESC: ST3_BET - LF/ABC 3-position switch operated
+        st3_bet = 0;
+      }
+      // replay last received CAN message whatever it contains + pressed AIRmatic mode button
+      sendMsg(&mbox0, CANID0, &ZGW_248h, sizeof(ZGW_248h), 1);
+      blink(LED_BUILTIN, 100);
+    }
+  }
+}
+
 // read config.json file from LittleFS
 JsonDocument readConfig() {
-  JsonDocument doc;
-  File file = LittleFS.open(config, "r");
-  if (!file) {
-    Serial.print("LittleFS: cannot access '");
-    Serial.print(config);
-    Serial.println("': No such file or directory");
-    configJson = "{}";
+  for (uint8_t i = 0; jsonBusy && i < 10; i++) {
+    delay_us(5000);
+  }
+  if (!jsonBusy) {
+    jsonBusy = true;
+    JsonDocument doc;
+    File file = LittleFS.open(config, "r");
+    if (!file) {
+      Serial.print("LittleFS: cannot access '");
+      Serial.print(config);
+      Serial.println("': No such file or directory");
+      configJson = "{}";
+      jsonBusy = false;
+      return doc;
+    }
+    DeserializationError err = deserializeJson(doc, file);
+    file.seek(0);
+    configJson = file.readString();
+    file.close();
+    if (err) {
+      Serial.print("Cannot deserialize the current JSON object: ");
+      Serial.println(err.c_str());
+    }
+    jsonBusy = false;
     return doc;
   }
-  DeserializationError err = deserializeJson(doc, file);
-  file.seek(0);
-  configJson = file.readString();
-  file.close();
-  if (err) {
-    Serial.print("Cannot deserialize the current JSON object: ");
-    Serial.println(err.c_str());
-  }
-  return doc;
+  Serial.print("LittleFS: error reading file '");
+  Serial.print(config);
+  Serial.println("': JSON object timeout: 'configJson'");
+  JsonDocument emptyDoc;
+  return emptyDoc;
 }
 
 // write config.json file to LittleFS
@@ -530,6 +609,7 @@ void awake(unsigned int delayMs) {
   }
 }
 
+
 void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -549,6 +629,9 @@ void setup() {
   digitalWrite(EN, HIGH);
   digitalWrite(STB, HIGH);
 
+  // protects shared SPI access between Can0, Can1
+  spiMutex = xSemaphoreCreateMutexStatic(&spiMutexBuffer);
+
   Can0 = new MCP2515(CS0); // CS -> GPIO5
   Can1 = new MCP2515(CS1); // CS -> GPIO15
 
@@ -561,25 +644,27 @@ void setup() {
 
   // Filters for Receive Buffer RXB0 (uses MASK0, filters RXF0 and RXF1)
   Can0->setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
-  Can0->setFilter(MCP2515::RXF0, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
-  Can0->setFilter(MCP2515::RXF1, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+  Can0->setFilter(MCP2515::RXF0, false, CANID0); // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
+  Can0->setFilter(MCP2515::RXF1, false, CANID1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
 
   // Filters for Receive Buffer RXB1 (uses MASK1, filters RXF2 to RXF5)
   Can0->setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
-  Can0->setFilter(MCP2515::RXF2, false, CANID_0); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
-  Can0->setFilter(MCP2515::RXF3, false, CANID_1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+  Can0->setFilter(MCP2515::RXF2, false, CANID0); // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
+  Can0->setFilter(MCP2515::RXF3, false, CANID1); // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
+  Can0->setFilter(MCP2515::RXF4, false, CANID4); // ECU: EZS, NAME: EZS_240h, ID: 0x0240, MSG COUNT: 31
+  Can0->setFilter(MCP2515::RXF5, false, CANID5); // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
 
   // Filters for Receive Buffer RXB0 (uses MASK0, filters RXF0 and RXF1)
   Can1->setFilterMask(MCP2515::MASK0, false, 0x7FF); // Standard ID mask = 11 bits
-  Can1->setFilter(MCP2515::RXF0, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
-  Can1->setFilter(MCP2515::RXF1, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+  Can1->setFilter(MCP2515::RXF0, false, CANID2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
+  Can1->setFilter(MCP2515::RXF1, false, CANID3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
   // Filters for Receive Buffer RXB1 (uses MASK1, filters RXF2 to RXF5)
   Can1->setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
-  Can1->setFilter(MCP2515::RXF2, false, CANID_2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
-  Can1->setFilter(MCP2515::RXF3, false, CANID_3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+  Can1->setFilter(MCP2515::RXF2, false, CANID2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
+  Can1->setFilter(MCP2515::RXF3, false, CANID3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 
-  if (Can0->setListenOnlyMode() == MCP2515::ERROR_OK) {
+  if (Can0->setNormalOneShotMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
   } else {
     Serial.println("WARNING: MCP2515 not initialized");
@@ -682,6 +767,14 @@ void loop() {
   static GetKeyEvent keyComboFrontUp(&button3, &button7);
 
   // main loop
+  if (MS_608h.FCOD_BR == 23) {
+    fzgcod = "C219";
+  } else if (MS_608h.FCOD_KAR == 3) {
+    fzgcod = "S211";
+  } else {
+    fzgcod = "W211";
+  }
+
   if (EZS_240h.KL_15) {
     if (FS_340h.FS_ID == 2) {
 
@@ -812,7 +905,7 @@ void loop() {
     ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
     ledcWrite(PWM4, duty + calib_hl - offset_nh * factor); // NHLS1 / not available for 211/219
 
-    feedWatchdog(60); // 30 sec
+    feedWatchdog(10); // 10 sec
   }
 
   // put TJA1055 into go-to-sleep / TJA1055 does the rest and will switch off TLE4271 automatically

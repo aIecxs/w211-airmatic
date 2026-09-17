@@ -1,8 +1,8 @@
-#ifndef W203_CANBUS_IC_NEW_H
-#define W203_CANBUS_IC_NEW_H
+#ifndef AIRMATIC_IC_H
+#define AIRMATIC_IC_H
 
-#include "canbuscomm.h"
-#include "EngineData.h"
+#include <Arduino.h>
+#include <mcp2515.h>
 
 
 #define W203 // Disable to compile for W211 IC display
@@ -71,4 +71,4 @@ class IC_DISPLAY{
         CanbusComm *c;
         uint8_t sendFrame();
 };
-#endif
+#endif /* AIRMATIC_IC_H */

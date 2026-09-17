@@ -21,9 +21,9 @@
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTA.h>
 #include <DNSServer.h>
+#include <rtc_wdt.h>
 #include <map>
 #include "crypt.h"
-#include <rtc_wdt.h>
 
 // BEWARE: Important! Change WiFi password here!
 uint8_t ssid[33] = "Mercedes-Benz";
@@ -139,64 +139,85 @@ String getContentType(String filename) {
 
 // write data -> into configJson bidirectional transport JSON string processed by HTML client
 void updateJson() {
-  DynamicJsonDocument doc(1024);
-  DeserializationError err = deserializeJson(doc, configJson);
-  if (err) {
-    Serial.print("Cannot deserialize the current JSON object: ");
-    Serial.println(err.c_str());
-    doc.to<JsonObject>();
+  if (!jsonBusy) {
+    jsonBusy = true;
+    DynamicJsonDocument doc(1024);
+    DeserializationError err = deserializeJson(doc, configJson);
+    if (err) {
+      Serial.print("Cannot deserialize the current JSON object: ");
+      Serial.println(err.c_str());
+      doc.to<JsonObject>();
+    }
+    JsonObject calibration = doc.containsKey("calibration") ? doc["calibration"].as<JsonObject>() : doc.createNestedObject("calibration");
+    calibration["calib_vl"] = calib_vl;
+    calibration["calib_vr"] = calib_vr;
+    calibration["calib_hl"] = calib_hl;
+    calibration["calib_hr"] = calib_hr;
+    calibration["duty"]     = duty;
+    JsonObject modeObj = doc.containsKey(mode) ? doc[mode].as<JsonObject>() : doc.createNestedObject(mode);
+    modeObj["offset_nv"] = offset_nv;
+    modeObj["offset_nh"] = offset_nh;
+    doc["current_mode"] = mode;
+    JsonObject level = doc.containsKey("level") ? doc["level"].as<JsonObject>() : doc.createNestedObject("level");
+    level["fzgn_vl"] = FS_340h.FZGN_VL;
+    level["fzgn_vr"] = FS_340h.FZGN_VR;
+    level["fzgn_hl"] = FS_340h.FZGN_HL;
+    level["fzgn_hr"] = FS_340h.FZGN_HR;
+    JsonObject led = doc.containsKey("led") ? doc["led"].as<JsonObject>() : doc.createNestedObject("led");
+    led["st2_led"] = FS_340h.ST2_LED_DL ? 1 : 0;
+    led["st3_ledr"] = FS_340h.ST3_LEDR_DL ? 1 : 0;
+    led["st3_ledl"] = FS_340h.ST3_LEDL_DL ? 1 : 0;
+    JsonObject control = doc.containsKey("control") ? doc["control"].as<JsonObject>() : doc.createNestedObject("control");
+    control["st2_bet"] = EZS_240h.ST2_BET;
+    control["st3_bet"] = EZS_240h.ST3_BET;
+    JsonObject w = doc.containsKey("wifi") ? doc["wifi"].as<JsonObject>() : doc.createNestedObject("wifi");
+    w["hash"].set(hash);
+    w["seed"].set(seed);
+    w["salt"].set(salt);
+    serializeJson(doc, configJson);
+    jsonBusy = false;
   }
-  JsonObject calibration = doc.containsKey("calibration") ? doc["calibration"].as<JsonObject>() : doc.createNestedObject("calibration");
-  calibration["calib_vl"] = calib_vl;
-  calibration["calib_vr"] = calib_vr;
-  calibration["calib_hl"] = calib_hl;
-  calibration["calib_hr"] = calib_hr;
-  calibration["duty"]     = duty;
-  JsonObject modeObj = doc.containsKey(mode) ? doc[mode].as<JsonObject>() : doc.createNestedObject(mode);
-  modeObj["offset_nv"] = offset_nv;
-  modeObj["offset_nh"] = offset_nh;
-  doc["current_mode"] = mode;
-  JsonObject level = doc.containsKey("level") ? doc["level"].as<JsonObject>() : doc.createNestedObject("level");
-  level["fzgn_vl"] = FS_340h.FZGN_VL;
-  level["fzgn_vr"] = FS_340h.FZGN_VR;
-  level["fzgn_hl"] = FS_340h.FZGN_HL;
-  level["fzgn_hr"] = FS_340h.FZGN_HR;
-  JsonObject w = doc.containsKey("wifi") ? doc["wifi"].as<JsonObject>() : doc.createNestedObject("wifi");
-  w["hash"].set(hash);
-  w["seed"].set(seed);
-  w["salt"].set(salt);
-  serializeJson(doc, configJson);
 }
 
 // read data <- from configJson bidirectional transport JSON string processed by HTML client
 void readJson() {
-  DynamicJsonDocument doc(1024);
-  DeserializationError err = deserializeJson(doc, configJson);
-  if (err) {
-    Serial.print("Cannot deserialize the current JSON object: ");
-    Serial.println(err.c_str());
-    return;
+  if (!jsonBusy) {
+    jsonBusy = true;
+    DynamicJsonDocument doc(1024);
+    DeserializationError err = deserializeJson(doc, configJson);
+    if (err) {
+      Serial.print("Cannot deserialize the current JSON object: ");
+      Serial.println(err.c_str());
+      jsonBusy = false;
+      return;
+    }
+    if (doc.containsKey("calibration")) {
+      JsonObject c = doc["calibration"];
+      if (c.containsKey("calib_vl")) calib_vl = c["calib_vl"];
+      if (c.containsKey("calib_vr")) calib_vr = c["calib_vr"];
+      if (c.containsKey("calib_hl")) calib_hl = c["calib_hl"];
+      if (c.containsKey("calib_hr")) calib_hr = c["calib_hr"];
+    }
+    if (doc.containsKey(mode)) {
+      JsonObject m = doc[mode];
+      if (m.containsKey("offset_nv")) offset_nv = m["offset_nv"];
+      if (m.containsKey("offset_nh")) offset_nh = m["offset_nh"];
+    }
+    if (doc.containsKey("control")) {
+      JsonObject btn = doc["control"];
+      if (btn.containsKey("st2_bet")) st2_bet = btn["st2_bet"];
+      if (btn.containsKey("st3_bet")) st3_bet = btn["st3_bet"];
+    }
+    if (doc.containsKey("wifi")) {
+      JsonObject w = doc["wifi"];
+      if (w.containsKey("hash")) hash = w["hash"].as<String>();
+      if (w.containsKey("seed")) seed = w["seed"].as<String>();
+      if (w.containsKey("salt")) salt = w["salt"].as<String>();
+    }
+    limitOffset(&offset_nv);
+    limitOffset(&offset_nh);
+    jsonBusy = false;
   }
-  if (doc.containsKey("calibration")) {
-    JsonObject c = doc["calibration"];
-    if (c.containsKey("calib_vl")) calib_vl = c["calib_vl"];
-    if (c.containsKey("calib_vr")) calib_vr = c["calib_vr"];
-    if (c.containsKey("calib_hl")) calib_hl = c["calib_hl"];
-    if (c.containsKey("calib_hr")) calib_hr = c["calib_hr"];
-  }
-  if (doc.containsKey(mode)) {
-    JsonObject m = doc[mode];
-    if (m.containsKey("offset_nv")) offset_nv = m["offset_nv"];
-    if (m.containsKey("offset_nh")) offset_nh = m["offset_nh"];
-  }
-  if (doc.containsKey("wifi")) {
-    JsonObject w = doc["wifi"];
-    if (w.containsKey("hash")) hash = w["hash"].as<String>();
-    if (w.containsKey("seed")) seed = w["seed"].as<String>();
-    if (w.containsKey("salt")) salt = w["salt"].as<String>();
-  }
-  limitOffset(&offset_nv);
-  limitOffset(&offset_nh);
 }
 
 // handle HTTP_POST actions
@@ -243,6 +264,12 @@ void webConfig() {
       updateWifi(hash, seed);
       scheduleReboot(5000);
     }
+    update = 0;
+  }
+  // receive AIRmatic mode change from HTML sidebar control
+  else if (update == 7) {
+    readJson();
+    updateMode(); // send CAN message
     update = 0;
   }
 }
@@ -390,8 +417,10 @@ void wifiSetup() {
     },
     NULL,
     [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      if (len > 0) {
+      if (!jsonBusy && len > 0) {
+        jsonBusy = true;
         configJson = String((char*)data, len);
+        jsonBusy = false;
       }
       if (request->hasParam("update", false)) {
         String updateParam = request->getParam("update", false)->value();
@@ -403,7 +432,11 @@ void wifiSetup() {
   // bidirectional transport JSON string processed by HTML client
   server.on(config, HTTP_GET, [](AsyncWebServerRequest *request){
     updateJson();
-    request->send(200, "application/json", configJson);
+    if (!jsonBusy) {
+      jsonBusy = true;
+      request->send(200, "application/json", configJson);
+      jsonBusy = false;
+    }
   });
 
   // captive portal
