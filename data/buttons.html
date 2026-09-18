@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body {
+        pointer-events: none;
+        font-family: "Gill Sans", "Trebuchet MS", sans-serif;
+      }
+      .sidebar {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(45%, -50%);
+        width: 100dvw;
+        display: flex;
+        flex-direction: row;
+        justify-content: left;
+        align-items: center;
+        gap: 1%;
+        background-color: transparent;
+        transition: transform 0.4s ease;
+        box-sizing: border-box;
+        pointer-events: auto;
+      }
+      .sidebar.open {
+        transform: translate(-50%, -50%);
+      }
+      .button-container {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: transparent;
+        box-sizing: border-box;
+      }
+      .button {
+        position: relative;
+        display: inline-block;
+        width: auto;
+        max-width: 100%;
+        height: auto;
+        z-index: 1;
+        user-select: none;
+        touch-action: manipulation;
+      }
+      .button img {
+        display: block;
+        width: 100%;
+      }
+      .button:active {
+        border-radius: 50%;
+        box-shadow: 0 0 10px #555;
+        transform: scale(0.95);
+        transition: transform 0.2s;
+      }
+      .button .label {
+        position: absolute;
+        bottom: 10%;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.2em;
+        user-select: none;
+      }
+      .led-stack {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -44%);
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+      .led {
+        width: 25%;
+        height: 25%;
+      }
+      .toggle-area {
+        width: auto;
+        font-size: 4em;
+        background-color: #aaa;
+        padding: 10px;
+        border-radius: 10px;
+        pointer-events: auto;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sidebar" id="sidebar" data-open="false">
+      <div class="toggle-area" onclick="toggleSidebar()">&#x2630;</div>
+      <div class="button-container">
+        <div class="led-stack">
+          <div class="led" id="st2_led" style="background:white;"></div>
+        </div>
+        <div class="button" onclick="button('st2_bet')">
+          <img src="button1.png" alt="N72s18" />
+          <span class="label">N72s18</span>
+        </div>
+      </div>
+      <div class="button-container">
+        <div class="led-stack">
+          <div class="led" id="st3_ledr" style="background:white;"></div>
+          <div class="led" id="st3_ledl" style="background:white;"></div>
+        </div>
+        <div class="button" onclick="button('st3_bet')">
+          <img src="button2.png" alt="N72s25" />
+          <span class="label">N72s25</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const sidebar = document.getElementById('sidebar');
+      let cachedJson = {};
+      let isOpen = true;
+
+      function toggleSidebar() {
+        isOpen = !isOpen;
+        sidebar.setAttribute('data-open', isOpen ? 'true' : 'false');
+        if (isOpen) {
+          const containers = sidebar.querySelectorAll('.toggle-area, .button-container');
+          let totalWidth = 0;
+          containers.forEach(container => {
+            totalWidth += container.offsetWidth;
+          });
+          sidebar.style.transform = `translate(calc(47dvw - ${totalWidth}px), -50%)`;
+        } else {
+          sidebar.style.transform = 'translate(45%, -50%)';
+        }
+      }
+
+      // send CAN message
+      function button(btn) {
+        if (typeof cachedJson.control === 'object') {
+          cachedJson.control[btn] = 1;
+          sendUpdatedJson();
+        }
+      }
+
+      // read LED states from CAN
+      function updateBtnLed() {
+        let id = ['st2_led', 'st3_ledr', 'st3_ledl'];
+        id.forEach(lid => {
+          const led = document.getElementById(lid);
+          if (lid in cachedJson.led && cachedJson.led[lid]) {
+            led.style.background = 'red';
+          } else {
+            led.style.background = 'white';
+          }
+        });
+      }
+
+/*
+      function fetchJson() {
+        if (isOpen) {
+          fetch("/config.json")
+            .then(response => response.json())
+            .then(data => {
+              cachedJson = data;
+              updateBtnLed();
+            });
+        }
+      }
+*/
+      async function fetchJson() {
+        if (isOpen) {
+          const response = await fetch("/config.json");
+          const data = await response.json();
+          cachedJson = data;
+        }
+      }
+
+      function sendUpdatedJson() {
+        fetch("/config?update=7", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cachedJson)
+        });
+      }
+
+      fetchJson();
+      isOpen = sidebar.getAttribute('data-open') === 'true';
+      setInterval(async () => {
+        await fetchJson();
+        updateBtnLed();
+      }, 2000);
+    </script>
+  </body>
+</html>

@@ -32,6 +32,11 @@
     #define MAX_IC_HEAD_CHARS  8
 #endif
 
+class CanbusComm {
+  public:
+    bool sendFrame(byte canDevice, can_frame *f);
+};
+
 class IC_DISPLAY{
     public:
         enum DISPLAY_PAGE {
@@ -56,7 +61,7 @@ class IC_DISPLAY{
         };
         static byte page;
         static uint8_t MAX_DISPLAY_WIDTH_PIXELS;
-        IC_DISPLAY(CanbusComm *c, EngineData *d);
+        IC_DISPLAY(CanbusComm *c);
         /**
          * Initialises the Target page, after waiting for the OEM to do its init first, so this overrides it 
          **/

@@ -298,10 +298,10 @@
       </div>
 
       <div class="links">
-        <p><span>AIRmatic Suspension Setup</span><br><a href="http://192.168.4.1/config" target="_blank">http://192.168.4.1/config</a></p>
-        <p><span>ESP32 Wi-Fi Settings</span><br><a href="http://192.168.4.1/settings">http://192.168.4.1/settings</a></p>
-        <p><span>ElegantOTA Firmware Update</span><br><a href="http://192.168.4.1/update" target="_blank">http://192.168.4.1/update</a></p>
-      </div>
+        <p><span>AIRmatic Suspension Setup</span><br><a href="/config" class="dynamic-link" target="_blank">http://192.168.4.1/config</a></p>
+        <p><span>ESP32 Wi-Fi Settings</span><br><a href="/settings" class="dynamic-link">http://192.168.4.1/settings</a></p>
+        <p><span>ElegantOTA Firmware Update</span><br><a href="/update" class="dynamic-link" target="_blank">http://192.168.4.1/update</a></p>
+      </div> 
 
       <p class="small-note">
         Trouble connecting?<br>Try disabling cellular data
@@ -350,7 +350,19 @@
           .catch(() => alert("Connection failed. Try again."));
       }
 
+      function setHostname() {
+        const host = window.location.hostname;
+        const links = document.querySelectorAll('.dynamic-link');
+        links.forEach(link => {
+          link.textContent = link.textContent.replace(
+            /192\.168\.4\.1/g,
+            `${host}`
+          );
+        });
+      }
+
       document.addEventListener('DOMContentLoaded', () => {
+        setHostname();
         startSession();
       });
     </script>

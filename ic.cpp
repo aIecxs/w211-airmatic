@@ -1,6 +1,11 @@
 #include "ic.h"
 
-
+#define CAN_BUS_C 0
+#define CAN_BUS_B 1
+struct mbx_t;
+extern mbx_t mbox0;
+extern mbx_t mbox1;
+extern void sendMsg(mbx_t *mbox, canid_t id, const void *msg, size_t len, uint8_t repeat);
 
 // Width of different ASCII Codes when the IC Renders them
 const uint8_t ASCII_WIDTHS[256] PROGMEM = {
@@ -54,7 +59,7 @@ bool IC_DISPLAY::textCanFit(const char* chars) {
 
 
 byte IC_DISPLAY::page;
-IC_DISPLAY::IC_DISPLAY(CanbusComm *c, EngineData *d) {
+IC_DISPLAY::IC_DISPLAY(CanbusComm *c) {
     this-> c = c;
 }
 
@@ -238,4 +243,12 @@ void IC_DISPLAY::setSymbols(DISPLAY_PAGE p, SYMBOL top, SYMBOL bottom){
         buffer[7] = calculateChecksum(7, buffer);
         sendPacketsISO(7, buffer);
     }
+}
+
+
+bool CanbusComm::sendFrame(byte canDevice, can_frame *f) {
+    if (!f) return false;
+    mbx_t *mboxCan = (canDevice == CAN_BUS_C) ? &mbox0 : &mbox1;
+    sendMsg(mboxCan, f->can_id, f->data, f->can_dlc, 1);
+    return true;
 }

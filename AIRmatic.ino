@@ -123,12 +123,15 @@ struct UBF_A1_t UBF_A1;     // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
 struct can_frame canMsg[4];
 
 // send mailbox queue
-static mbx_t mbox0 = {}; // Can0
-static mbx_t mbox1 = {}; // Can1
+mbx_t mbox0 = {}; // Can0
+mbx_t mbox1 = {}; // Can1
 
 // Chip select
 MCP2515* Can0 = nullptr; // CS -> GPIO5
 MCP2515* Can1 = nullptr; // CS -> GPIO15
+
+// instrument cluster IC_CUSTOM_TEXT
+IC_DISPLAY display(new CanbusComm());
 
 // PWM default value
 const int freq = 4000; // 4 kHz
