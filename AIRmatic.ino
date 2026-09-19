@@ -25,8 +25,8 @@
 #include <ESPAsyncWebServer.h>
 #include "w211_can_c.h"
 #include "w211_can_b.h"
+#include "ic_display.h"
 #include "crypt.h"
-#include "ic.h"
 
 // reserved
 #define LED_BUILTIN GPIO_NUM_2
@@ -130,8 +130,8 @@ mbx_t mbox1 = {}; // Can1
 MCP2515* Can0 = nullptr; // CS -> GPIO5
 MCP2515* Can1 = nullptr; // CS -> GPIO15
 
-// instrument cluster IC_CUSTOM_TEXT
-IC_DISPLAY display(new CanbusComm());
+// instrument cluster ARDUINO_CODE
+IC_DISPLAY ic(new CANBUS_COMMUNICATOR(CS1, CAN_83K3BPS, CAN_B_DEF));
 
 // PWM default value
 const int freq = 4000; // 4 kHz

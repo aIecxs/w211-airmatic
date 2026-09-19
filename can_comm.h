@@ -1,11 +1,17 @@
 #ifndef CANCOM_H
-
 #define CANCOM_H
 
-#include "defines.h"
-#include "can.h"
-#include "mcp2515.h"
-#include "wiring_private.h"
+#include <Arduino.h>
+#include <mcp2515.h>
+
+//#define DEBUG
+#ifdef DEBUG
+  #define DPRINT(...) Serial.print(__VA_ARGS__)
+  #define DPRINTLN(...) Serial.println(__VA_ARGS__)
+#else
+  #define DPRINT(...)
+  #define DPRINTLN(...)
+#endif
 
 #define CAN_C_DEF 'C'
 #define CAN_B_DEF 'B'
@@ -62,7 +68,7 @@ class CANBUS_COMMUNICATOR {
     private:
         String frame_string;
         can_frame read;
-        MCP2515 *mcp;
+//        MCP2515 *mcp;
         char busID;
 };
     

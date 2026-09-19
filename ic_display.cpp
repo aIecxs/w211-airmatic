@@ -1,5 +1,5 @@
 #include "ic_display.h"
-#include "can.h"
+
 
 IC_DISPLAY::IC_DISPLAY(CANBUS_COMMUNICATOR *can) {
     canB = can;
@@ -25,7 +25,7 @@ void IC_DISPLAY::setHeader(uint8_t p, const char* text, uint8_t fmt) {
     if (strlen(text) == 0) return;
 
     DPRINTLN(F("-- Update header --"));
-    uint8_t str_len = min(strlen(text), 20);
+    uint8_t str_len = min(strlen(text), 20U);
     buffer_size = str_len + 3;
     buffer[0] = p; // Page number
     buffer[1] = 0x29; // Package 29 (Header text update)
@@ -43,7 +43,7 @@ void IC_DISPLAY::setBody(uint8_t p, const char* text, uint8_t fmt = IC_TEXT_FMT_
     if (strlen(text) == 0) return;
 
     DPRINTLN(F("-- Update body --"));
-    uint8_t str_len = min(strlen(text), 32);
+    uint8_t str_len = min(strlen(text), 32U);
     buffer_size = str_len + 7; // Not including CS bit
     buffer[0] = p; // Page number
     buffer[1] = 0x26; // Package 26 (Body text update)
@@ -125,7 +125,7 @@ void IC_DISPLAY::processIcResponse(can_frame *r) {
 
 void IC_DISPLAY::initPage(uint8_t p, const char* header, uint8_t fmt, uint8_t upper_Symbol, uint8_t lower_Symbol, uint8_t numLines=1) {
     DPRINTLN(F("-- Init page --"));
-    uint8_t str_len = min(strlen(header), 20);
+    uint8_t str_len = min(strlen(header), 20U);
     buffer_size = str_len + 17; // Not including CS bit
     buffer[0] = p; // Page number
     buffer[1] = 0x24; // Package 24 (Init page)

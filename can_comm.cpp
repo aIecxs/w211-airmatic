@@ -1,6 +1,22 @@
 #include "can_comm.h"
 
+struct mbx_t;
+extern mbx_t mbox0;
+extern mbx_t mbox1;
+extern void sendMsg(mbx_t *mbox, canid_t id, const void *msg, size_t len, uint8_t repeat);
+
+static mbx_t* set(char canDevice) {
+    if (canDevice == CAN_C_DEF) {
+        return &mbox0;
+    }
+    if (canDevice == CAN_B_DEF) {
+        return &mbox1;
+    }
+    return nullptr;
+}
+
 CANBUS_COMMUNICATOR::CANBUS_COMMUNICATOR(uint8_t cs_pin, CAN_SPEED speed, CAN_CLOCK clock, char c) {
+/*
     this->mcp = new MCP2515(cs_pin);
     this->mcp->reset();
     if(this->mcp->setBitrate(speed) != MCP2515::ERROR_OK) {
@@ -9,11 +25,13 @@ CANBUS_COMMUNICATOR::CANBUS_COMMUNICATOR(uint8_t cs_pin, CAN_SPEED speed, CAN_CL
         Serial.println("Canbus Ready");
     }
     this->mcp->setNormalMode();
+*/
     frame_string.reserve(140);
     this->busID = c;
 }
 
 CANBUS_COMMUNICATOR::CANBUS_COMMUNICATOR(uint8_t cs_pin, CAN_SPEED speed, char c) {
+/*
     this->mcp = new MCP2515(cs_pin);
     this->mcp->reset();
     if(this->mcp->setBitrate(speed) != MCP2515::ERROR_OK) {
@@ -22,15 +40,22 @@ CANBUS_COMMUNICATOR::CANBUS_COMMUNICATOR(uint8_t cs_pin, CAN_SPEED speed, char c
         Serial.println("Canbus Ready");
     }
     this->mcp->setNormalMode();
+*/
     frame_string.reserve(140);
     this->busID = c;
 }
 
 void CANBUS_COMMUNICATOR::sendToBus(can_frame *send) {
-    mcp->sendMessage(send);
+//    mcp->sendMessage(send);
+    mbx_t* mbox = set(busID);
+    if (send == nullptr || mbox == nullptr) {
+        return;
+    }
+    sendMsg(mbox, send->can_id, send->data, send->can_dlc, 1);
 }
 
 can_frame *CANBUS_COMMUNICATOR::read_frame() {
+/*
     // Setup default Error frame
     read.can_id = 0x00;
     read.can_dlc = 0x00;
@@ -38,6 +63,15 @@ can_frame *CANBUS_COMMUNICATOR::read_frame() {
     // Try and read a frame from Bus. If frame cannot be read, then the read frame
     // Retains its data
     mcp->readMessage(&read);
+*/
+// todo: feed TP_KOMBI_AGW
+    read.can_id = 0x1D0;
+    read.can_dlc = 0x08;
+    read.data[0] = 0x06;
+    read.data[1] = 0x05;
+    read.data[2] = 0x27;
+    read.data[6] = 0xC2;
+
     return &read;
 }
 
@@ -81,11 +115,11 @@ String *CANBUS_COMMUNICATOR::frame_to_string(can_frame *f, bool includeBinary) {
 }
 
 void CANBUS_COMMUNICATOR::wakeup() {
-    this->mcp->setNormalMode();
+//    this->mcp->setNormalMode();
 }
 
 void CANBUS_COMMUNICATOR::setReadOnly() {
-    this->mcp->setListenOnlyMode();
+//    this->mcp->setListenOnlyMode();
 }
 
 void CANBUS_COMMUNICATOR::printFrame(can_frame *f) {

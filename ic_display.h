@@ -1,10 +1,10 @@
 #ifndef IC_DISPLAY_H
 #define IC_DISPLAY_H
 
-#include <avr/pgmspace.h>
-#include "string.h"
+
+
 #include "can_comm.h"
-#include "defines.h"
+
 
 // CAN ID of AGW that communicates to the IC Display
 #define SEND_CAN_ID 0x1A4
