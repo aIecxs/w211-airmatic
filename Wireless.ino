@@ -25,7 +25,7 @@
 #include <map>
 #include "crypt.h"
 
-// BEWARE: Important! Change WiFi password here!
+// BEWARE: Important! Change WiFi password on first boot!
 uint8_t ssid[33] = "Mercedes-Benz";
 uint8_t password[33] = "12345678";
 String hash;

@@ -62,6 +62,9 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 - **The Mbed TLS Contributors**  
   [Mbed-TLS](https://github.com/Mbed-TLS)  
 
+- **Mbed TLS v4 compatibility**  
+  [Mbed TLS v3 legacy](https://github.com/david-cermak/mbedtls_v3_shim) headers
+
 
   ---
   
@@ -243,21 +246,22 @@ To compile and upload the firmware to your ESP32, follow these steps:
     Install the library via **Arduino Library Manager**: search for `Async TCP` by ESP32Async  
     [https://github.com/ESP32Async/AsyncTCP](https://github.com/ESP32Async/AsyncTCP)
 
- 9. **FakeCH340 Driver (optional)**  
+ 9. **Mbed TLS v3 legacy layer (optional)**  
+    For arduino-esp32 Core v4.x / ESP-IDF v6.x download the library (Arduino Variant) [mbedtls_v3_shim](https://github.com/david-cermak/mbedtls_v3_shim) by david-cermak  
+    Install the Library in Arduino IDE 2 -> Menu ->  
+    Sketch -> Include Library -> Add .ZIP Library... -> [mbedtls_v3_shim.zip](https://aIecxs.github.io/mbedtls_v3_shim/mbedtls_v3_shim.zip)
+
+10. **FakeCH340 Driver (optional)**  
     If you encounter serial driver conflicts under Windows, you may need to install FakeCH340 drivers.  
     [FakeCH340DriverFixer by SHWotever](https://github.com/SHWotever/FakeCH340DriverFixer)
 
-10. **Download and Extract the firmware**  
+11. **Download and Extract the firmware**  
     download and extract [w211-airmatic-master.zip](https://codeload.github.com/aIecxs/w211-airmatic/zip/refs/heads/master)  
-    create new directory `%UserProfile%/Documents/Arduino/` `AIRmatic` and copy files
+    create new directory `%UserProfile%/Documents/Arduino/` -> `'AIRmatic'` and copy files
     - data/\*.\*  
-    - AIRmatic.ino  
-    - Wireless.ino  
-    - CAN.ino  
-    - w211_can_c.h  
-    - w211_can_b.h  
-    - crypto.h  
-    - crypto.cpp  
+    - \*.ino  
+    - \*.h  
+    - \*.cpp  
 
 12. **Compile and Upload the firmware** (USB)  
     connect the ESP32 DevKit to Computer, open the Arduino Sketch, select the Board  
@@ -266,10 +270,10 @@ To compile and upload the firmware to your ESP32, follow these steps:
     press `[Ctrl]` + `[Shift]` + `[P]`, then type > `"Upload LittleFS to Pico/ESP8266/ESP32"`  
     (refer to guide [3. LittleFS support](README.md#installation) screenshot 4.)
 
-14. **Update the firmware** (WiFi)  
-    connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L27) for credentials)  
+13. **Update the firmware** (WiFi)  
+    connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L28) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin) (or see in `%Temp%/arduino/sketches`)  
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin) (or see in `%LocalAppData%/arduino/sketches/`)  
     select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
 
 ---
@@ -291,7 +295,7 @@ To compile and upload the firmware to your ESP32, follow these steps:
   Use the SPI interface (MOSI, MISO, SCK, CS, INT) to communicate with the MCP2515 CAN module. For AIRmatic mode selection from center console (CAN C) is splitted from ECU. For Steering wheel buttons (CAN B) second CAN bus module with 16 MHz Crystal Oscillator is required.
 
 - **Connect MCU to PCB:**  
-  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L34) for pins)  
+  Link the MCU PWM output pins to the PCB for analog signal offset control. (refer to [AIRmatic.ino](AIRmatic.ino#L58) for pins)  
   Note: on the new Rev of the PCB the MCU can plugged in socket headers straight on PCB  
   select MCU Board with solder jumpers on the back (NodeMCU-32S or DevKit)
 

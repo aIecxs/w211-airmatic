@@ -192,8 +192,7 @@ void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, c
 }
 
 // export CAN message into bit field decoder
-void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len)
-{
+void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
   switch(id) {
     case CANID0:
       copyMsg(&ZGW_248h); // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
@@ -298,7 +297,6 @@ void feedWatchdog(unsigned long amount) {
              : static_cast<int32_t>(amount);
   portEXIT_CRITICAL(&mux_wd);
 }
-
 
 // Watchdog output pulse
 void startWatchdog(gpio_num_t wpin, const unsigned long wfreq) {
@@ -409,6 +407,107 @@ class GetKeyEvent {
 void limitOffset(int8_t* off) {
   *off = *off < -MAX_OFF ? -MAX_OFF : *off; // max suspension lowering
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
+}
+
+// display offset on ic
+void displayOffset(int axle, int action) {
+
+  enum class select { Rear, Front };
+  enum class cmd { Reset, Set, Dn, Up };
+
+  const char* text = "AIRmatic";
+
+  constexpr uint8_t num = 4;
+  static const char* lines[num];
+
+  static char offset[8];
+  int8_t value = 0;
+
+  const char* chassis = nullptr;
+  const char* level = nullptr;
+
+  switch ((select)axle) {
+    case select::Rear:
+      chassis = "Hinten";
+      value = offset_nh;
+      break;
+    case select::Front:
+      chassis = "Vorn";
+      value = offset_nv;
+      break;
+    default:
+      return;
+  }
+  snprintf(offset, sizeof(offset), "%+d mm", (int)value);
+  level = (value < 0) ? "tief" : "hoch";
+
+  switch ((cmd)action) {
+    case cmd::Reset:
+      lines[0] = mode.c_str();
+      lines[1] = chassis;
+      lines[2] = offset;
+      lines[3] = "RESET";
+      ic.initPage(
+        IC_PAGE_TELEPHONE,
+        text,
+        IC_TEXT_FMT_CENTER_JUSTIFICATION,
+        IC_SYMB_NONE,
+        IC_SYMB_NONE,
+        num
+      );
+      ic.setBodyTel(num, lines);
+      break;
+
+    case cmd::Set:
+      lines[0] = mode.c_str();
+      lines[1] = chassis;
+      lines[2] = offset;
+      lines[3] = "OK";
+      ic.initPage(
+        IC_PAGE_TELEPHONE,
+        text,
+        IC_TEXT_FMT_CENTER_JUSTIFICATION,
+        IC_SYMB_NONE,
+        IC_SYMB_NONE,
+        num
+      );
+      ic.setBodyTel(num, lines);
+      break;
+
+    case cmd::Dn:
+      lines[0] = mode.c_str();
+      lines[1] = chassis;
+      lines[2] = offset;
+      lines[3] = level;
+      ic.initPage(
+        IC_PAGE_TELEPHONE,
+        text,
+        IC_TEXT_FMT_CENTER_JUSTIFICATION,
+        IC_SYMB_NONE,
+        IC_SYMB_DOWN_ARROW,
+        num
+      );
+      ic.setBodyTel(num, lines);
+      break;
+
+    case cmd::Up:
+      lines[0] = mode.c_str();
+      lines[1] = chassis;
+      lines[2] = offset;
+      lines[3] = level;
+      ic.initPage(
+        IC_PAGE_TELEPHONE,
+        text,
+        IC_TEXT_FMT_CENTER_JUSTIFICATION,
+        IC_SYMB_UP_ARROW,
+        IC_SYMB_NONE,
+        num
+      );
+      ic.setBodyTel(num, lines);
+      break;
+    default:
+      return;
+  }
 }
 
 // write AIRmatic mode to CAN bus
@@ -672,7 +771,7 @@ void setup() {
   } else {
     Serial.println("WARNING: MCP2515 not initialized");
   }
-  if (Can1->setListenOnlyMode() == MCP2515::ERROR_OK) {
+  if (Can1->setNormalOneShotMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
   } else {
     Serial.println("WARNING: MCP2515 not initialized");
@@ -828,6 +927,7 @@ void loop() {
       limitOffset(&offset_nv);
       Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
       blink(LED_BUILTIN, 100);
+      displayOffset(1, 3); // select::Front + cmd::Up
     }
     // FRONT + LOWER
     button7 = KOMBI_A5.BUTTON_1_1;
@@ -838,6 +938,7 @@ void loop() {
       limitOffset(&offset_nv);
       Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle level custom offset");
       blink(LED_BUILTIN, 100);
+      displayOffset(1, 2); // select::Front + cmd::Dn
     }
     // REAR + HIGHER
     button6 = KOMBI_A5.BUTTON_1_2;
@@ -848,6 +949,7 @@ void loop() {
       limitOffset(&offset_nh);
       Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
       blink(LED_BUILTIN, 100);
+      displayOffset(0, 3); // select::Rear + cmd::Up
     }
     // REAR + LOWER
     button6 = KOMBI_A5.BUTTON_1_2;
@@ -858,6 +960,7 @@ void loop() {
       limitOffset(&offset_nh);
       Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle level custom offset");
       blink(LED_BUILTIN, 100);
+      displayOffset(0, 2); // select::Rear + cmd::Dn
     }
     // on confirm: write offsets to table
     // FRONT + SAVE
@@ -868,6 +971,7 @@ void loop() {
       Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle -> SET");
       updateSettings(mode, "offset_nv", offset_nv);
       blink(LED_BUILTIN, 100);
+      displayOffset(1, 1); // select::Front + cmd::Set
     }
     // REAR + SAVE
     button6 = KOMBI_A5.BUTTON_1_2;
@@ -877,6 +981,7 @@ void loop() {
       Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle -> SET");
       updateSettings(mode, "offset_nh", offset_nh);
       blink(LED_BUILTIN, 100);
+      displayOffset(0, 1); // select::Rear + cmd::Set
     }
     // FRONT + CANCEL
     button7 = KOMBI_A5.BUTTON_1_1;
@@ -887,6 +992,7 @@ void loop() {
       Serial.print("offset_nv = "); Serial.print(offset_nv, DEC); Serial.println(" mm front axle -> SET");
       updateSettings(mode, "offset_nv", offset_nv);
       blink(LED_BUILTIN, 100);
+      displayOffset(1, 0); // select::Front + cmd::Reset
     }
     // REAR + CANCEL
     button6 = KOMBI_A5.BUTTON_1_2;
@@ -897,6 +1003,7 @@ void loop() {
       Serial.print("offset_nh = "); Serial.print(offset_nh, DEC); Serial.println(" mm rear axle -> SET");
       updateSettings(mode, "offset_nh", offset_nh);
       blink(LED_BUILTIN, 100);
+      displayOffset(0, 0); // select::Rear + cmd::Reset
     }
   }
 
