@@ -338,7 +338,7 @@ typedef struct MS_608h_t {
   uint8_t FCOD_MOT0               : 6; // DESC: FCOD_MOT - Vehicle code engine 7Bit, Bit0-5 (Bit6 -> Signal FCOD_MOT6), OFFSET: 26, LEN: 6
 /*
   enum class FCOD_MOT0_c : uint8_t {
-	// ... section extra bytes -> FCOD_MOT
+    // ... section extra bytes -> FCOD_MOT
   } : 6; FCOD_MOT_c FCOD_MOT0;
 */
 // byte 4

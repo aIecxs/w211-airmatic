@@ -28,12 +28,49 @@
       text-align: left;
     }
 
-    iframe {
+    iframe.two-js_html {
       width: 835px;
       height: 359px;
       border: none;
       display: block;
       margin: 1rem auto;
+    }
+
+    .sidebar_stack {
+      position: fixed;
+      top: auto;
+      left: auto;
+      right: auto;
+      width: 100dvw;
+      height: auto;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .sidebar_stack iframe {
+      display: block;
+      width: auto;
+      height: auto;
+      flex: 0 0 auto;
+      border: 0;
+      margin: 0;
+      padding: 0;
+      pointer-events: auto;
+    }
+
+    .sidebar_stack iframe#buttons_html {
+      left: auto;
+      right: 0;
+      height: 210px;
+    }
+
+    .sidebar_stack iframe#wheels_html {
+      left: 0;
+      right: auto;
+      width: 40px;
+      height: 410px;
     }
 
     table {
@@ -179,7 +216,7 @@
       left: 50%;
       width: 90%;
       opacity: 0.5;
-      pointer-events:auto;
+      pointer-events: auto;
     }
 
     .cell-wrapper .label {
@@ -199,8 +236,11 @@
 <body>
   <h1>AIRmatic level custom offset</h1>
 
-  <!-- Sidebar -->
-  <iframe src="buttons.html" style="position: fixed; top: 0; left: 0; width: 100dvw; z-index: 9;"></iframe>
+  <!-- Sidebars -->
+  <div class="sidebar_stack">
+    <iframe id="buttons_html" src="buttons.html"></iframe>
+    <iframe id="wheels_html" src="wheels.html"></iframe>
+  </div>
 
   <!-- Mode blocks -->
   <div class="mode-block" data-mode="comfort">
@@ -228,7 +268,7 @@
     </table>
 
     <!-- 2D Canvas Scene -->
-    <iframe src="two-js.html"></iframe>
+    <iframe class="two-js_html" src="two-js.html"></iframe>
  
     <table class="offset-table">
       <tr>
@@ -287,7 +327,7 @@
     </table>
 
     <!-- 2D Canvas Scene -->
-    <iframe src="two-js.html"></iframe>
+    <iframe class="two-js_html" src="two-js.html"></iframe>
  
     <table class="offset-table">
       <tr>
@@ -346,7 +386,7 @@
     </table>
 
     <!-- 2D Canvas Scene -->
-    <iframe src="two-js.html"></iframe>
+    <iframe class="two-js_html" src="two-js.html"></iframe>
  
     <table class="offset-table">
       <tr>
@@ -405,7 +445,7 @@
     </table>
 
     <!-- 2D Canvas Scene -->
-    <iframe src="two-js.html"></iframe>
+    <iframe class="two-js_html" src="two-js.html"></iframe>
  
     <table class="offset-table">
       <tr>
@@ -504,7 +544,11 @@
   let cachedJson = {};
   let lastFocused = null;
   let currentMode = null;
- 
+  let fzgcod = null;
+  let wheels = null;
+
+  const twoFrames = document.querySelectorAll('.two-js_html');
+
   // additional offset for 2D rendering animation (mm)
   const offset = {
     comfort: { nv:   0, nh:   0 },
@@ -525,7 +569,148 @@
       lastFocused = null;
     }
   });
-  
+
+  window.addEventListener('message', function (event) {
+    const data = event.data;
+    if (!data || !data.type) return;
+
+    switch (data.type) {
+      
+      // sidebar: receive iframe size and anchor
+      case 'sidebar-size': {
+        if (event.origin !== window.location.origin) return;
+        const iframe = document.getElementById(data.id);
+        if (!iframe || event.source !== iframe.contentWindow) return;
+        
+        iframe.style.width = data.width;
+        iframe.style.height = data.height;
+        if (data.top) {
+          iframe.style.top = 0;
+          iframe.style.bottom = "auto";
+        } else {
+          iframe.style.top = "auto";
+          iframe.style.bottom = 0;
+        }
+        if (data.left) {
+          iframe.style.alignSelf = "flex-start";
+        } else {
+          iframe.style.alignSelf = "flex-end";
+        }
+        break;
+      }
+
+      // sidebar: receive button() from buttons.html -> send CAN message
+      case 'button-click': {
+        const btn = data.btn;
+        if (typeof cachedJson.control === 'object') {
+          cachedJson.control[btn] = 1;
+          sendButtonCAN();
+        }
+        break;
+      }
+
+      // sidebar: receive button() from wheels.html -> forward filename to two-js.html
+      case 'file-selected': {
+        const filename = data.filename;
+        twoFrames.forEach(function (frame) {
+          frame.contentWindow.postMessage(
+            {
+              type: 'wheel-selected',
+              filename: filename,
+              fcod_br: fzgcod
+            },
+            '*'
+          );
+        });
+        updateWheels(fzgcod, filename);
+        break;
+      }
+
+      // iframe: receive currentWheels from initWheels() -> forward filename to two-js.html
+      case 'get-wheel': {
+        initWheels(event.source);
+        break;
+      }
+    }
+  });
+
+  // iframe: helper function to read currentWheels from cachedJson
+  function initWheels(targetWindow) {
+    let attempts = 0;
+    const retry = 10;
+    function readWheels() {
+      if (
+        cachedJson && 
+        typeof cachedJson.wheels !== 'undefined' && cachedJson.wheels !== null &&
+        typeof cachedJson.fcod_br !== 'undefined' && cachedJson.fcod_br !== null
+      ) {
+        const currentWheels = cachedJson?.wheels ?? 0;
+        const fcod_br = cachedJson?.fcod_br;
+        targetWindow.postMessage(
+          {
+            type: 'wheel-selected',
+            status: 'success',
+            filename: `wheel_${currentWheels}.png`,
+            fcod_br: fcod_br
+          },
+          '*'
+        );
+        return;
+      } else {
+        attempts++;
+        if (attempts > retry) {
+          targetWindow.postMessage(
+            {
+              type: 'wheel-selected',
+              status: 'timeout'
+            },
+            '*'
+          );
+          return;
+        }
+        setTimeout(readWheels, 200);
+      }
+    }
+    readWheels();
+  }
+
+  // initial loading of wheel.png from configJson
+  function createWheels() {
+    const currentWheels = cachedJson?.wheels ?? 0;
+    if (currentWheels === wheels) {
+      return;
+    }
+    wheels = currentWheels;
+    twoFrames.forEach(function (frame) {
+      frame.contentWindow.postMessage(
+        {
+          type: 'wheel-selected',
+          filename: `wheel_${wheels}.png`,
+          fcod_br: fzgcod
+        },
+        '*'
+      );
+    });
+  }
+
+  // initial loading of chassing.png from configJson
+  function createChassis() {
+    const fcod_br = cachedJson?.fcod_br;
+    if (fcod_br === fzgcod) {
+      return;
+    }
+    fzgcod = fcod_br;
+    twoFrames.forEach(function (frame) {
+      frame.contentWindow.postMessage(
+        {
+          type: 'chassis-selected',
+          fcod_br: fzgcod
+        },
+        '*'
+      );
+    });
+  }
+
   function incrementValue(id, delta) {
     const field = document.getElementById(id);
     if (!field) return;
@@ -697,7 +882,7 @@
     document.getElementById('warn-ico').style.display = "none";
     document.querySelectorAll('.inc-btn').forEach(btn => btn.style.display = "none");
     document.querySelectorAll('.duty').forEach(span => span.style.display = "inline-block");
-    fetch("/config?update=2", { method: "POST" })
+    fetch("/config?update=2", { method: "POST" });
   }
 
   function sendUpdatedJson() {
@@ -709,7 +894,43 @@
   }
 
   function saveOffset(mode) {
-    fetch("/config?update=4", { method: "POST" })
+    fetch("/config?update=4", { method: "POST" });
+  }
+
+  // send CAN message triggered by button clicks
+  function sendButtonCAN() {
+    fetch("/config?update=7", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cachedJson)
+    });
+  }
+
+  // update wheel configuration and notify backend
+  function updateWheels(fcod_br, fileno) {
+    const digits = fileno.match(/_([^_]+)\.png$/i);
+    const wheelsNo = digits ? parseInt(digits[1], 10) : 0;
+    cachedJson.fcod_br = fcod_br;
+    cachedJson.wheels = isNaN(wheelsNo) ? 0 : wheelsNo;
+    fetch("/config?update=8", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cachedJson)
+    });
+  }
+
+  // update button LED states in buttons.html sidebar
+  function updateBtnLed() {
+    const buttonsIframe = document.getElementById('buttons_html');
+    if (buttonsIframe && buttonsIframe.contentWindow) {
+      buttonsIframe.contentWindow.postMessage(
+        {
+          type: 'led-update',
+          led: cachedJson.led || {}
+        },
+        '*'
+      );
+    }
   }
 
   function fetchJson() {
@@ -723,6 +944,7 @@
           currentMode = null;
         }
         updateUI();
+        updateBtnLed();
       });
   }
 
@@ -790,6 +1012,8 @@
   }
 
   fetchJson();
+  createWheels();
+  createChassis();
   initSliders();
   setInterval(fetchJson, 2000);
 </script>

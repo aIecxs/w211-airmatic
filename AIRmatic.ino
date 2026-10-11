@@ -148,6 +148,7 @@ uint8_t st3_bet = 0; // DESC: ST3_BET - LF/ABC 3-position switch operated
 
 volatile bool jsonBusy = false;
 String configJson;
+uint8_t wheels = 0;
 String fzgcod;
 String mode = "default";
 const char* config = "/config.json";
@@ -163,7 +164,7 @@ volatile bool canDown = true;
 volatile bool canInterruptFlag0 = false;
 volatile bool canInterruptFlag1 = false;
 
-static volatile int32_t wd_counter;
+volatile int32_t wd_counter;
 portMUX_TYPE mux_wd = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_can0 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_can1 = portMUX_INITIALIZER_UNLOCKED;
@@ -268,7 +269,7 @@ void blinkTaskFunc(void *param) {
 }
 
 // Watchdog output control timer callback
-static void stopWatchdog(void *arg) {
+void stopWatchdog(void *arg) {
 
   // read args passed from startWatchdog()
   wd_ctx_t *ctx = (wd_ctx_t*)arg;
@@ -278,7 +279,7 @@ static void stopWatchdog(void *arg) {
   portENTER_CRITICAL(&mux_wd);
   bool active = (wd_counter > 0);
   if (active) {
-	  wd_counter--;
+    wd_counter--;
   }
   portEXIT_CRITICAL(&mux_wd);
 
@@ -409,7 +410,17 @@ void limitOffset(int8_t* off) {
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
 }
 
-// display offset on ic
+/** // display offset on ic
+ * @brief Sends the custom axle-level offset to the instrument cluster
+ *   `0` = `select::Rear`
+ *   `1` = `select::Front`
+ *   `0` = `cmd::Reset`
+ *   `1` = `cmd::Set`
+ *   `2` = `cmd::Dn`
+ *   `3` = `cmd::Up`
+ * @param axle : `select::Rear`, `select::Front`
+ * @param action : `cmd::Reset`, `cmd::Set`, `cmd::Dn`, `cmd::Up`
+ */
 void displayOffset(int axle, int action) {
 
   enum class select { Rear, Front };
@@ -427,11 +438,11 @@ void displayOffset(int axle, int action) {
   const char* level = nullptr;
 
   switch ((select)axle) {
-    case select::Rear:
+    case select::Rear:  // MSG NAME: BUTTON_1_2 - Vorheriges Display, OFFSET 14, LENGTH 1
       chassis = "Hinten";
       value = offset_nh;
       break;
-    case select::Front:
+    case select::Front: // MSG NAME: BUTTON_1_1 - Nächstes Display, OFFSET 15, LENGTH 1
       chassis = "Vorn";
       value = offset_nv;
       break;
@@ -442,7 +453,7 @@ void displayOffset(int axle, int action) {
   level = (value < 0) ? "tief" : "hoch";
 
   switch ((cmd)action) {
-    case cmd::Reset:
+    case cmd::Reset:    // MSG NAME: BUTTON_4_2 - Telefon End, OFFSET 8, LENGTH 1
       lines[0] = mode.c_str();
       lines[1] = chassis;
       lines[2] = offset;
@@ -458,7 +469,7 @@ void displayOffset(int axle, int action) {
       ic.setBodyTel(num, lines);
       break;
 
-    case cmd::Set:
+    case cmd::Set:      // MSG NAME: BUTTON_4_1 - Telefon Send, OFFSET 9, LENGTH 1
       lines[0] = mode.c_str();
       lines[1] = chassis;
       lines[2] = offset;
@@ -474,7 +485,7 @@ void displayOffset(int axle, int action) {
       ic.setBodyTel(num, lines);
       break;
 
-    case cmd::Dn:
+    case cmd::Dn:       // MSG NAME: BUTTON_3_2 - Taste "-", OFFSET 10, LENGTH 1
       lines[0] = mode.c_str();
       lines[1] = chassis;
       lines[2] = offset;
@@ -490,7 +501,7 @@ void displayOffset(int axle, int action) {
       ic.setBodyTel(num, lines);
       break;
 
-    case cmd::Up:
+    case cmd::Up:       // MSG NAME: BUTTON_3_1 - Taste "+", OFFSET 11, LENGTH 1
       lines[0] = mode.c_str();
       lines[1] = chassis;
       lines[2] = offset;
@@ -581,6 +592,27 @@ void saveConfig(const JsonDocument& doc) {
   }
   serializeJson(doc, file);
   file.close();
+}
+
+// read Chassis and Wheels PNG from LittleFS
+void getPNG() {
+  JsonDocument doc = readConfig();
+  fzgcod = "";
+  wheels = 0;
+  if (doc.containsKey("fcod_br")) {
+    fzgcod = doc["fcod_br"].as<String>();
+  }
+  if (doc.containsKey("wheels")) {
+    wheels = doc["wheels"];
+  }
+}
+
+// save Chassis and Wheels PNG to LittleFS
+void updatePNG() {
+  JsonDocument doc = readConfig();
+  doc["fcod_br"].set(fzgcod);
+  doc["wheels"] = wheels;
+  saveConfig(doc);
 }
 
 void getCalibration() {
@@ -869,11 +901,16 @@ void loop() {
   static GetKeyEvent keyComboFrontUp(&button3, &button7);
 
   // main loop
+  if (!fzgcod.length()) {
+    getPNG();
+  }
   if (MS_608h.FCOD_BR == 23) {
     fzgcod = "C219";
   } else if (MS_608h.FCOD_KAR == 3) {
     fzgcod = "S211";
-  } else {
+  } else if (MS_608h.FCOD_BR == 13) {
+    fzgcod = "W211";
+  } else if (!fzgcod.length()) {
     fzgcod = "W211";
   }
 

@@ -19,6 +19,28 @@
     <canvas id="scene" width="808" height="316"></canvas>
 
     <script>
+      let fzgcod;
+      let wheels;
+      let chassis;
+      let frontWheel;
+      let rearWheel;
+
+      window.addEventListener('DOMContentLoaded', () => {
+        window.parent.postMessage({ type: 'get-wheel' }, '*');
+      });
+
+      window.addEventListener('message', function (event) {
+        if (event.data?.type === 'wheel-selected') {
+          createWheels(event.data.filename);
+          createChassis(event.data.fcod_br);
+          return;
+        }
+        if (event.data?.type === 'chassis-selected') {
+          createChassis(event.data.fcod_br);
+          return;
+        }
+      });
+
       function deg2rad(deg) {
         return deg * (Math.PI / 180);
       }
@@ -32,12 +54,32 @@
       }).appendTo(elem.parentNode);
 
       // ----- Wheels -----
-      const frontWheel = two.makeSprite("./wheel.png", 165, 200);
-      const rearWheel = frontWheel.clone(two);
-      rearWheel.translation.set(594, 200);
+      function createWheels(filename) {
+        wheels = filename ?? 'wheel_0.png';
+        if (frontWheel) {
+          frontWheel.remove();
+        }
+        if (rearWheel) {
+          rearWheel.remove();
+        }
+        frontWheel = two.makeSprite(`./${filename}`, 165, 200);
+        rearWheel = frontWheel.clone(two);
+        rearWheel.translation.set(594, 200);
+        two.update();
+      }
 
       // ----- Chassis -----
-      const chassis = two.makeSprite('./chassis.png', 404, 158);
+      function createChassis(fname) {
+        fzgcod = fname ?? 'W211';
+        if (chassis) {
+          chassis.remove();
+        }
+        chassis = two.makeSprite(`./${fzgcod.toLowerCase()}.png`, 404, 158);
+        two.update();
+      }
+
+      createWheels("wheel_0.png");
+      createChassis("W211");
 
       // ----- Wheel Mount Recess -----
       const chassisBg = two.makeRectangle(chassis.position.x, chassis.position.y, 550, 75);

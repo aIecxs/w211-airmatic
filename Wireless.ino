@@ -157,6 +157,8 @@ void updateJson() {
     JsonObject modeObj = doc.containsKey(mode) ? doc[mode].as<JsonObject>() : doc.createNestedObject(mode);
     modeObj["offset_nv"] = offset_nv;
     modeObj["offset_nh"] = offset_nh;
+    doc["fcod_br"].set(fzgcod);
+    doc["wheels"] = wheels;
     doc["current_mode"] = mode;
     JsonObject level = doc.containsKey("level") ? doc["level"].as<JsonObject>() : doc.createNestedObject("level");
     level["fzgn_vl"] = FS_340h.FZGN_VL;
@@ -202,6 +204,9 @@ void readJson() {
       JsonObject m = doc[mode];
       if (m.containsKey("offset_nv")) offset_nv = m["offset_nv"];
       if (m.containsKey("offset_nh")) offset_nh = m["offset_nh"];
+    }
+    if (doc.containsKey("wheels")) {
+      wheels = doc["wheels"];
     }
     if (doc.containsKey("control")) {
       JsonObject btn = doc["control"];
@@ -270,6 +275,12 @@ void webConfig() {
   else if (update == 7) {
     readJson();
     updateMode(); // send CAN message
+    update = 0;
+  }
+  // save Chassis and Wheels PNG to LittleFS
+  else if (update == 8) {
+    readJson();
+    updatePNG();
     update = 0;
   }
 }

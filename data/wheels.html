@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body {
+        pointer-events: none;
+        font-family: "Gill Sans", "Trebuchet MS", sans-serif;
+      }
+      .sidebar {
+        position: fixed;
+        top: 50%;
+        left: 0%;
+        transform: translate(-90%, -50%);
+        width: max-content;
+        display: flex;
+        flex-direction: row;
+        justify-content: left;
+        align-items: center;
+        gap: 1%;
+        background-color: transparent;
+        transition: transform 0.4s ease;
+        box-sizing: border-box;
+        pointer-events: auto;
+      }
+      .sidebar.open {
+        transform: translate(0%, -50%);
+      }
+      .button-container {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: transparent;
+        box-sizing: border-box;
+      }
+      .button {
+        position: relative;
+        display: inline-block;
+        width: auto;
+        max-width: 100%;
+        height: auto;
+        z-index: 1;
+        user-select: none;
+        touch-action: manipulation;
+      }
+      .button img {
+        display: block;
+        width: 100%;
+      }
+      .button:active {
+        border-radius: 50%;
+        box-shadow: 0 0 10px #555;
+        transform: scale(0.95);
+        transition: transform 0.2s;
+      }
+      .toggle-area {
+        width: auto;
+        font-size: 4em;
+        background-color: #aaa;
+        padding: 10px;
+        border-radius: 10px;
+        pointer-events: auto;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sidebar" id="sidebar" data-open="false">
+      <div class="button-container">
+        <div class="button" onclick="button('wheel_0.png')">
+          <img src="wheel_0.png" alt="wheel 0" />
+        </div>
+        <div class="button" onclick="button('wheel_3.png')">
+          <img src="wheel_3.png" alt="wheel 3" />
+        </div>
+        <div class="button" onclick="button('wheel_6.png')">
+          <img src="wheel_6.png" alt="wheel 6" />
+        </div>
+        <div class="button" onclick="button('wheel_9.png')">
+          <img src="wheel_9.png" alt="wheel 9" />
+        </div>
+      </div>
+      <div class="button-container">
+        <div class="button" onclick="button('wheel_1.png')">
+          <img src="wheel_1.png" alt="wheel 1" />
+        </div>
+        <div class="button" onclick="button('wheel_4.png')">
+          <img src="wheel_4.png" alt="wheel 4" />
+        </div>
+        <div class="button" onclick="button('wheel_7.png')">
+          <img src="wheel_7.png" alt="wheel 7" />
+        </div>
+        <div class="button" onclick="button('wheel_10.png')">
+          <img src="wheel_10.png" alt="wheel 10" />
+        </div>
+      </div>
+      <div class="button-container">
+        <div class="button" onclick="button('wheel_2.png')">
+          <img src="wheel_2.png" alt="wheel 2" />
+        </div>
+        <div class="button" onclick="button('wheel_5.png')">
+          <img src="wheel_5.png" alt="wheel 5" />
+        </div>
+        <div class="button" onclick="button('wheel_8.png')">
+          <img src="wheel_8.png" alt="wheel 8" />
+        </div>
+        <div class="button" onclick="button('wheel_11.png')">
+          <img src="wheel_11.png" alt="wheel 11" />
+        </div>
+      </div>
+      <div class="toggle-area" onclick="toggleSidebar()">&#x2630;</div>
+    </div>
+
+    <script>
+      const sidebar = document.getElementById('sidebar');
+      let isOpen = true;
+
+      function postIframeSize({id, width, height, top, left}) {
+        window.parent.postMessage(
+          {
+            type: "sidebar-size",
+            id,
+            width,
+            height,
+            top,
+            left
+          },
+          window.location.origin
+        );
+      }
+
+      function toggleSidebar() {
+        isOpen = !isOpen;
+        sidebar.setAttribute('data-open', isOpen ? 'true' : 'false');
+        if (isOpen) {
+          postIframeSize({
+            id: "wheels_html",
+            width: "380px",
+            height: "410px",
+            top: 1,
+            left: 1
+          });
+          sidebar.style.transform = 'translate(0%, -50%)';
+        } else {
+          sidebar.style.transform = 'translate(-90%, -50%)';
+          setTimeout(() => {
+            postIframeSize({
+              id: "wheels_html",
+              width: "40px",
+              height: "410px",
+              top: 1,
+              left: 1
+            });
+          }, 400);
+        }
+      }
+
+      function button(wheel) {
+        window.parent.postMessage(
+          {
+            type: 'file-selected',
+            filename: wheel
+          },
+          '*'
+        );
+      }
+
+      isOpen = sidebar.getAttribute('data-open') === 'true';
+    </script>
+  </body>
+</html>
