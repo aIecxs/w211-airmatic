@@ -21,12 +21,15 @@ Installing this modification may **invalidate your vehicle's operating license a
 
 ---
 
-**License**  
+**License**
+
 This project is licensed under the MIT License.  
 See the [LICENSE](LICENSE) file for full details.
 
-This project includes third-party libraries licensed under the **LGPL-2.1** license.  
-In accordance with the LGPL-2.1 license terms, please always provide full source code with every binary released.
+This project includes third-party libraries licensed under **MIT**, **Apache-2.0**, **BSD-3-Clause**, **GPL-2.0**, **GPL-2.0-or-later**, **LGPL-2.1**, **LGPL-3.0**, **AGPL-3.0** or the **GreenSock Standard License**. The license of each library is available in its repository.
+
+Compiled firmware images (.bin) include **ElegantOTA** and are therefore distributed under the terms of the **AGPL-3.0**.  
+In accordance with these licenses, please always provide full source code with every binary released.
 
 ---
 
@@ -42,7 +45,11 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 - **Mercedes-Benz CAN Bus Research**  
   CAN bus reverse engineering by @rnd-ash.  
   [rnd-ash/mercedes-hacking-docs](https://github.com/rnd-ash/mercedes-hacking-docs/blob/master/Chapter%207%20In%20Car%20Entertainment.md)
-  
+
+- **Mercedes-Benz IC Display hacking**  
+  Instrument cluster display protocol and Arduino CAN code API by @rnd-ash.  
+  [rnd-ash/W203-canbus/ARDUINO_CODE](https://github.com/rnd-ash/W203-canbus/blob/949d301/ARDUINO_CODE/ic_display.h)
+
 - **ArduinoJson**  
   Efficient JSON serialization library for embedded systems  
   [bblanchon/ArduinoJson](https://github.com/bblanchon/ArduinoJson)  
@@ -65,10 +72,28 @@ In accordance with the LGPL-2.1 license terms, please always provide full source
 - **Mbed TLS v4 compatibility**  
   [Mbed TLS v3 legacy](https://github.com/david-cermak/mbedtls_v3_shim) headers
 
+- **Forge TLS crypto**  
+  JavaScript implementation of TLS and cryptography tools  
+  [digitalbazaar/forge](https://github.com/digitalbazaar/forge)
 
-  ---
+- **Two.js drawing api**  
+  2D rendering engine by Jono Brandel (@jonobr1)  
+  [jonobr1/two.js](https://github.com/jonobr1/two.js)
+
+- **GSAP (GreenSock Animation Platform)**  
+  Animation library by Jack Doyle (@jackdoyle) and GreenSock  
+  [gsap.com](https://gsap.com)
+
+---
+
+**AI Disclosure**  
+- The web interface (HTML, CSS, JavaScript) was largely created through AI-assisted "vibe coding".
+- Some C++ functions were written with AI support. Two classes are AI-generated (‎delayMicrosec, GetKeyEvent).
+- The README itself is fully AI-generated.
   
 **&#x26A0;&#xFE0F; `UNDER DEVELOPMENT – CODE BASE FOR PERSONAL ARCHIVING ONLY` &#x26A0;&#xFE0F;**
+
+---
 
 ## Quick start Guide
 
