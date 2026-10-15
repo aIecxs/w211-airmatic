@@ -80,6 +80,18 @@ void canEvent1(void *pvParameters) {
   }
 }
 
+// Interrupt based CanRx
+void IRAM_ATTR onCanInterrupt0() {
+  portENTER_CRITICAL_ISR(&mux_can0);
+  canInterruptFlag0 = true;
+  portEXIT_CRITICAL_ISR(&mux_can0);
+}
+void IRAM_ATTR onCanInterrupt1() {
+  portENTER_CRITICAL_ISR(&mux_can1);
+  canInterruptFlag1 = true;
+  portEXIT_CRITICAL_ISR(&mux_can1);
+}
+
 bool enqueueFrame(mbx_t *mbox, const struct can_frame *msg) {
   if (mbox->count < MAILBOX_CAPACITY) {
     mbox->frames[mbox->tail] = *msg;

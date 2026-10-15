@@ -690,18 +690,6 @@ void updateWifi(const String &hash_new, const String &seed_new) {
   saveConfig(doc);
 }
 
-// Interrupt based CanRx
-void IRAM_ATTR onCanInterrupt0() {
-  portENTER_CRITICAL_ISR(&mux_can0);
-  canInterruptFlag0 = true;
-  portEXIT_CRITICAL_ISR(&mux_can0);
-}
-void IRAM_ATTR onCanInterrupt1() {
-  portENTER_CRITICAL_ISR(&mux_can1);
-  canInterruptFlag1 = true;
-  portEXIT_CRITICAL_ISR(&mux_can1);
-}
-
 // power down no CAN traffic
 void go_to_sleep(unsigned int timeout) {
   if ( millis() - timer1 > timeout ) {
