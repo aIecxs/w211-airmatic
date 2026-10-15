@@ -2,11 +2,10 @@ void canEvent0(void *pvParameters) {
   bool rxbox0 = false;
   bool rxbox1 = false;
   while (true) {
-    if (canInterruptFlag0) {
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1)) == pdTRUE || mbox0.count > 0) {
       if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        uint8_t irq = Can0->getInterrupts();
         SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
+        uint8_t irq = Can0->getInterrupts();
         if (irq & MCP2515::CANINTF_RX0IF) {
           if (Can0->readMessage(MCP2515::RXB0, &canMsg[0]) == MCP2515::ERROR_OK) {
             rxbox0 = true;
@@ -81,22 +80,18 @@ void canEvent1(void *pvParameters) {
 
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
-  portENTER_CRITICAL_ISR(&mux_can0);
   if (canTask0 != nullptr) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(canTask0, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
-  portEXIT_CRITICAL_ISR(&mux_can0);
 }
 void IRAM_ATTR onCanInterrupt1() {
-  portENTER_CRITICAL_ISR(&mux_can1);
   if (canTask1 != nullptr) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(canTask1, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
-  portEXIT_CRITICAL_ISR(&mux_can1);
 }
 
 bool enqueueFrame(mbx_t *mbox, const struct can_frame *msg) {
