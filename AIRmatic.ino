@@ -161,13 +161,8 @@ volatile unsigned long timer1 = 0; // millis()
 volatile unsigned long timer2 = 0;
 
 volatile bool canDown = true;
-volatile bool canInterruptFlag0 = false;
-volatile bool canInterruptFlag1 = false;
-
 volatile int32_t wd_counter;
 portMUX_TYPE mux_wd = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE mux_can0 = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE mux_can1 = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_awake = portMUX_INITIALIZER_UNLOCKED;
 
 StaticSemaphore_t spiMutexBuffer;

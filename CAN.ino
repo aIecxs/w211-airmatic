@@ -3,11 +3,10 @@ void canEvent0(void *pvParameters) {
   bool rxbox1 = false;
   while (true) {
     if (canInterruptFlag0) {
-      portENTER_CRITICAL(&mux_can0);
-      canInterruptFlag0 = false;
-      portEXIT_CRITICAL(&mux_can0);
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1)) == pdTRUE || mbox0.count > 0) {
       if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         uint8_t irq = Can0->getInterrupts();
+        SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
         if (irq & MCP2515::CANINTF_RX0IF) {
           if (Can0->readMessage(MCP2515::RXB0, &canMsg[0]) == MCP2515::ERROR_OK) {
             rxbox0 = true;
@@ -19,6 +18,7 @@ void canEvent0(void *pvParameters) {
           }
         }
         Can0->clearInterrupts();
+        SPI.endTransaction();
         xSemaphoreGive(spiMutex);
       }
       if (rxbox0) {
@@ -33,8 +33,8 @@ void canEvent0(void *pvParameters) {
       }
       awake(100); // prevent idle timeout
     }
-    // send mailbox queue with delay 100 ms
-    sendMbx(Can0, &mbox0, 100);
+    // send mailbox queue with delay 10 ms
+    sendMbx(Can0, &mbox0, 10);
     delay_us(1000);
   }
 }
@@ -43,11 +43,9 @@ void canEvent1(void *pvParameters) {
   bool rxbox0 = false;
   bool rxbox1 = false;
   while (true) {
-    if (canInterruptFlag1) {
-      portENTER_CRITICAL(&mux_can1);
-      canInterruptFlag1 = false;
-      portEXIT_CRITICAL(&mux_can1);
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1)) == pdTRUE || mbox1.count > 0) {
       if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
         uint8_t irq = Can1->getInterrupts();
         if (irq & MCP2515::CANINTF_RX0IF) {
           if (Can1->readMessage(MCP2515::RXB0, &canMsg[2]) == MCP2515::ERROR_OK) {
@@ -60,6 +58,7 @@ void canEvent1(void *pvParameters) {
           }
         }
         Can1->clearInterrupts();
+        SPI.endTransaction();
         xSemaphoreGive(spiMutex);
       }
       if (rxbox0) {
@@ -74,8 +73,8 @@ void canEvent1(void *pvParameters) {
       }
       awake(100); // prevent idle timeout
     }
-    // send mailbox queue with delay 100 ms
-    sendMbx(Can1, &mbox1, 100);
+    // send mailbox queue with delay 10 ms
+    sendMbx(Can1, &mbox1, 10);
     delay_us(1000);
   }
 }
@@ -83,12 +82,20 @@ void canEvent1(void *pvParameters) {
 // Interrupt based CanRx
 void IRAM_ATTR onCanInterrupt0() {
   portENTER_CRITICAL_ISR(&mux_can0);
-  canInterruptFlag0 = true;
+  if (canTask0 != nullptr) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(canTask0, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
   portEXIT_CRITICAL_ISR(&mux_can0);
 }
 void IRAM_ATTR onCanInterrupt1() {
   portENTER_CRITICAL_ISR(&mux_can1);
-  canInterruptFlag1 = true;
+  if (canTask1 != nullptr) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(canTask1, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
   portEXIT_CRITICAL_ISR(&mux_can1);
 }
 
@@ -138,7 +145,9 @@ void sendMbx(MCP2515 *can, mbx_t *mbox, unsigned long min_interval_ms) {
       if (dequeueFrame(mbox, &msg)) {
         mbox->timestamp = now;
         if (xSemaphoreTake(spiMutex, portMAX_DELAY) == pdTRUE) {
+          SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
           can->sendMessage(&msg);
+          SPI.endTransaction();
           xSemaphoreGive(spiMutex);
         }
 
