@@ -145,14 +145,6 @@ void sendMbx(MCP2515 *can, mbx_t *mbox, unsigned long min_interval_ms) {
           SPI.endTransaction();
           xSemaphoreGive(spiMutex);
         }
-
-        // debug output
-        Serial.printf("0x%04X: (%02d):", msg.can_id, msg.can_dlc);
-        for (uint8_t i = 0; i < msg.can_dlc; i++) {
-          Serial.printf(" %02X", msg.data[i]);
-        }
-        Serial.println();
-
       }
     }
   }
