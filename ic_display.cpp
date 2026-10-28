@@ -228,9 +228,72 @@ void IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
     }
 }
 
-void IC_DISPLAY::wait(uint8_t msec) {
+void IC_DISPLAY::wait(unsigned long msec) {
     unsigned long endTime = millis() + msec;
     while (millis() <= endTime) {
         processIcResponse(canB->read_frame());
     }
+}
+
+void IC_DISPLAY::update() {
+    const unsigned long now = millis();
+    if (replayPageEnabled) {
+        if (now - replayPageStartedAt > PAGE_REPLAY_LIFETIME_MS) {
+            replayPageEnabled = false;
+        } else if (now - replayPageLastAt > replayPageRepeat) {
+            replayPageLastAt = now;
+            initPage(
+                IC_PAGE_TELEPHONE,
+                replayPageText,
+                IC_TEXT_FMT_LEFT_JUSTIFICATION,
+                IC_SYMB_NONE,
+                IC_SYMB_NONE,
+                replayPageLineCount
+            );
+        }
+    }
+    if (replayBodyEnabled) {
+        if (now - replayBodyStartedAt > BODY_REPLAY_LIFETIME_MS) {
+            replayBodyEnabled = false;
+        } else if (now - replayBodyLastAt > replayBodyRepeat) {
+            replayBodyLastAt = now;
+            const char* lines[MAX_BODY_LINES] = {
+                replayBody[0],
+                replayBody[1],
+                replayBody[2],
+                replayBody[3]
+            };
+            setBodyTel(replayBodyLineCount, lines);
+        }
+    }
+}
+
+void IC_DISPLAY::update(const char* pageText, unsigned long repeat) {
+    if (pageText == nullptr || repeat == 0) {
+        return;
+    }
+    snprintf(replayPageText, sizeof(replayPageText), "%s", pageText);
+    replayPageRepeat = repeat;
+    replayPageLineCount = MAX_BODY_LINES;
+    replayPageEnabled = true;
+}
+
+void IC_DISPLAY::update(uint8_t bodyLineCount, const char* const* bodyLines, unsigned long repeat) {
+    if (bodyLines == nullptr ||
+        bodyLineCount == 0 ||
+        bodyLineCount > MAX_BODY_LINES ||
+        repeat == 0) {
+        return;
+    }
+    for (uint8_t i = 0; i < bodyLineCount; i++) {
+        snprintf(
+            replayBody[i],
+            sizeof(replayBody[i]),
+            "%s",
+            bodyLines[i] != nullptr ? bodyLines[i] : ""
+        );
+    }
+    replayBodyLineCount = bodyLineCount;
+    replayBodyRepeat = repeat;
+    replayBodyEnabled = true;
 }

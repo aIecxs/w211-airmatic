@@ -331,11 +331,11 @@ void generateKeysTask() {
     return;
   }
   xTaskCreatePinnedToCore(
-    cryptoTask,    // Task function.
-    "Crypto Task", // name of task.
+    cryptoTask,    // Task function
+    "Crypto Task", // name of task
     8192,          // Stack size of task
     NULL,          // parameter of the task
-    2,             // priority of the task
+    3,             // priority of the task
     &cryptTask,    // Task handle to keep track of created task
     1);            // pin task to core 1
 }

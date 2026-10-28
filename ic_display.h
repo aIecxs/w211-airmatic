@@ -17,9 +17,9 @@
 
 
 // IC FORMATTING
-#define IC_TEXT_FMT_LEFT_JUSTIFICATION   0b00000000 // Center justification
-#define IC_TEXT_FMT_RIGHT_JUSTIFICATION  0b00001000 // Left justification
-#define IC_TEXT_FMT_CENTER_JUSTIFICATION 0b00010000 // Right justification
+#define IC_TEXT_FMT_LEFT_JUSTIFICATION   0b00000000 // Left justification
+#define IC_TEXT_FMT_RIGHT_JUSTIFICATION  0b00001000 // Right justification
+#define IC_TEXT_FMT_CENTER_JUSTIFICATION 0b00010000 // Center justification
 #define IC_TEXT_FMT_FLASHING             0b00100000 // Flashing text
 #define IC_TEXT_FMT_HIGHLIGHTED          0b01000000 // Highlighted text
 
@@ -61,8 +61,20 @@
  */
 class IC_DISPLAY {
     public:
-
+        /**
+         * Call regularly from loop() to service scheduled replays
+         */
         void update();
+
+        /**
+         * Register a page for periodic replay
+         */
+        void update(const char* pageText, unsigned long repeat);
+
+        /**
+         * Register a body for replay until 10 seconds after registration
+         */
+        void update(uint8_t bodyLineCount, const char* const* bodyLines, unsigned long repeat);
 
         /**
          * Used to store the current page on the IC being active
@@ -119,7 +131,30 @@ class IC_DISPLAY {
          * @param r Pointer to can frame with ID 0x1D0 that has been read from the bus
          */
         void processIcResponse(can_frame *r);
+
     private:
+        // hardcoded expiry time of the replay - adjust here
+        static constexpr unsigned long PAGE_REPLAY_LIFETIME_MS = 600000;
+        static constexpr unsigned long BODY_REPLAY_LIFETIME_MS = 10000;
+        static constexpr uint8_t MAX_BODY_LINES = 4;
+        static constexpr size_t REPLAY_LINE_SIZE = 32;
+
+        // Page replay state
+        char replayPageText[32] = {};
+        bool replayPageEnabled = false;
+        uint8_t replayPageLineCount = MAX_BODY_LINES;
+        unsigned long replayPageRepeat = 0;
+        unsigned long replayPageLastAt = 0;
+        unsigned long replayPageStartedAt = 0;
+
+        // Body replay state
+        char replayBody[MAX_BODY_LINES][REPLAY_LINE_SIZE] = {};
+        uint8_t replayBodyLineCount = 0;
+        bool replayBodyEnabled = false;
+        unsigned long replayBodyRepeat = 0;
+        unsigned long replayBodyLastAt = 0;
+        unsigned long replayBodyStartedAt = 0;
+
         /** Used to store payload buffer */
         uint8_t buffer[55] = { 0x00 };
 
@@ -141,7 +176,7 @@ class IC_DISPLAY {
          */
         uint8_t getChecksum(uint8_t len, uint8_t* payload);
 
-        void wait(uint8_t msec);
+        void wait(unsigned long msec);
 
         CANBUS_COMMUNICATOR *canB;
 };

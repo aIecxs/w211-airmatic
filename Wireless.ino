@@ -64,6 +64,9 @@ void onOTAEnd(bool success) {
     Serial.println("There was an error during OTA update!");
   }
   // <Add your own code here>
+  if (success) {
+    scheduleReboot(2000);
+  }
 }
 
 
@@ -137,6 +140,41 @@ String getContentType(String filename) {
   return "text/plain";
 }
 
+
+// debug statistics
+void updateStats() {
+  if (!can0 && !can1) {
+    return;
+  }
+  DynamicJsonDocument doc(1024);
+  DeserializationError err = deserializeJson(doc, configJson);
+  if (err) {
+    doc.to<JsonObject>();
+  }
+  JsonObject stats = doc.containsKey("stats") ? doc["stats"].as<JsonObject>() : doc.createNestedObject("stats");
+  canStats_t* stats_list[] = { &can0_stats, &can1_stats };
+  for (int i = 0; i < 2; i++) {
+    canStats_t* cs = stats_list[i];
+    cs->updateWindow();
+    if (xSemaphoreTake(cs->mutex, portMAX_DELAY) == pdTRUE) {
+      char key[8];
+      sprintf(key, "can%u", cs->id);
+      JsonObject canObj = stats.containsKey(key) ? stats[key].as<JsonObject>() : stats.createNestedObject(key);
+      float display_max = (cs->rx_count < 2) ? 0.0f : (cs->max_interval_us / 1000.0f);
+      float display_min = (cs->rx_count < 2 || cs->min_interval_us == 0xFFFFFFFF) ? 0.0f : (cs->min_interval_us / 1000.0f);
+      float display_avg = (cs->rx_count < 2) ? 0.0f : ((float)cs->total_interval_us / (cs->rx_count - 1) / 1000.0f);
+      canObj["count"] = cs->rx_count;
+      canObj["max_ms"] = display_max;
+      canObj["min_ms"] = display_min;
+      canObj["avg_ms"] = display_avg;
+      canObj["cur_ms"] = cs->current_10s_ms;
+      xSemaphoreGive(cs->mutex);
+    }
+  }
+  serializeJson(doc, configJson);
+}
+
+
 // write data -> into configJson bidirectional transport JSON string processed by HTML client
 void updateJson() {
   if (!jsonBusy) {
@@ -177,6 +215,7 @@ void updateJson() {
     w["seed"].set(seed);
     w["salt"].set(salt);
     serializeJson(doc, configJson);
+    updateStats(); // debug statistics
     jsonBusy = false;
   }
 }
@@ -400,6 +439,11 @@ void wifiSetup() {
     req->send(204);
   });
 
+  // debug: CAN stats (hidden)
+  server.on("/stats", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/stats.html", "text/html");
+  });
+
   // wifi settings
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *req){
     req->send(LittleFS, "/settings.html", "text/html");
@@ -468,10 +512,11 @@ void wifiSetup() {
     }
   });
 
-  ElegantOTA.begin(&server);
+  ElegantOTA.setAutoReboot(false);
   ElegantOTA.onStart(onOTAStart);
   ElegantOTA.onProgress(onOTAProgress);
   ElegantOTA.onEnd(onOTAEnd);
+  ElegantOTA.begin(&server);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -510,7 +555,6 @@ void wifiEvent(void *parameter) {
       ElegantOTA.loop();
       webConfig();
       dnsServer.processNextRequest();
-      handleReboot();
     }
     delay(100);
   }

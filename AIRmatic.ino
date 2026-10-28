@@ -70,10 +70,14 @@
 // CAN IDs Interior CAN-B
 #define CANID2 0x01CA // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 #define CANID3 0x001A // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+#define CANID6 0x01D0 // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+
+#define CAN_DATA_EXPIRY_MS 1000
 
 // copy CAN message into bit field decoder
 #define copyMsg(ptr) importMsg(#ptr, ptr, sizeof(*(ptr)), id, msg, len)
 
+/*
 // helper macros for creating unique variable names
 #define CONCAT_IMPL(x, y) x##y
 #define CONCAT(x, y) CONCAT_IMPL(x, y)
@@ -87,7 +91,7 @@ class delayMicrosec;
 #define delay_us_INTERNAL(n, us) \
   static delayMicrosec CONCAT(delay_us_, n); \
   CONCAT(delay_us_, n).wait(us)
-
+*/
 
 #define MAILBOX_CAPACITY 16
 typedef struct {
@@ -109,6 +113,28 @@ struct BlinkCmd {
   unsigned int ontime;
 };
 
+struct canStats_t;
+extern canStats_t can0_stats;
+extern canStats_t can1_stats;
+
+constexpr unsigned int DISPLAY_NOTIFY_SERVICE = 1u << 0;
+constexpr unsigned int DISPLAY_NOTIFY_COMMAND = 1u << 1;
+unsigned long displayStart = 0;
+bool displayEnabled = false;
+
+enum class DisplayCommandType : uint8_t {
+  Page,
+  Body
+};
+
+struct DisplayCommand {
+  DisplayCommandType type;
+  unsigned long repeat;
+  char pageText[32];
+  uint8_t bodyLineCount;
+  char bodyLines[4][32];
+};
+
 // CAN Frames Motor CAN-C
 struct ZGW_248h_t ZGW_248h; // ECU: ZGW, NAME: ZGW_248h, ID: 0x0248, MSG COUNT: 31
 struct FS_340h_t FS_340h;   // ECU: LF_ABC, NAME: FS_340h, ID: 0x0340, MSG COUNT: 16
@@ -118,6 +144,7 @@ struct MS_608h_t MS_608h;   // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
 // CAN Frames Interior CAN-B
 struct KOMBI_A5_t KOMBI_A5; // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 struct UBF_A1_t UBF_A1;     // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+struct TP_KOMBI_AGW1_t TP_KOMBI_AGW1; // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
 
 // CAN message buffer
 struct can_frame canMsg[4];
@@ -129,6 +156,8 @@ mbx_t mbox1 = {}; // Can1
 // Chip select
 MCP2515* Can0 = nullptr; // CS -> GPIO5
 MCP2515* Can1 = nullptr; // CS -> GPIO15
+bool can0 = false;
+bool can1 = false;
 
 // instrument cluster ARDUINO_CODE
 IC_DISPLAY ic(new CANBUS_COMMUNICATOR(CS1, CAN_83K3BPS, CAN_B_DEF));
@@ -161,12 +190,13 @@ volatile unsigned long timer1 = 0; // millis()
 volatile unsigned long timer2 = 0;
 
 volatile bool canDown = true;
-volatile int32_t wd_counter;
+volatile int wd_counter;
 portMUX_TYPE mux_wd = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE mux_awake = portMUX_INITIALIZER_UNLOCKED;
 
 StaticSemaphore_t spiMutexBuffer;
 SemaphoreHandle_t spiMutex;
+SemaphoreHandle_t canMutex;
 
 TaskHandle_t canTask0; // Motor CAN-C
 TaskHandle_t canTask1; // Interior CAN-B
@@ -176,11 +206,15 @@ TaskHandle_t wifiTask;
 TaskHandle_t blinkTask;
 QueueHandle_t blinkQueue;
 
+TaskHandle_t displayTaskHandle;
+QueueHandle_t displayQueue;
 
 // import CAN message into bit field decoder
 void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
   if (len <= destSize) {
+    xSemaphoreTake(canMutex, portMAX_DELAY);
     memcpy(dest, msg, len);
+    xSemaphoreGive(canMutex);
   } else {
     Serial.printf("WARNING: CANID 0x%04X (%s): frame too long, struct size is %d bytes\r\n", id, name, (int)destSize);
     delay(100);
@@ -213,9 +247,13 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
         (MS_608h.FCOD_MOT6 << 6);    // Vehicle code engine with 7 bits, bit 6
 */
       break;
+    case CANID6:
+      copyMsg(&TP_KOMBI_AGW1); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+      break;
   }
 }
 
+/*
 // non-blocking delayMicroseconds()
 class delayMicrosec {
   private:
@@ -247,6 +285,7 @@ class delayMicrosec {
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
 };
+*/
 
 // blink function: non-blocking wrapper
 void blinkTaskFunc(void *param) {
@@ -257,8 +296,6 @@ void blinkTaskFunc(void *param) {
       digitalWrite(cmd.pin, !state);
       delay(cmd.ontime);
       digitalWrite(cmd.pin, state);
-    } else {
-      delay_us(1000);
     }
   }
 }
@@ -285,7 +322,7 @@ void stopWatchdog(void *arg) {
   }
 }
 
-// reset watchdog: requires counter = time (sec) × freq (Hz)
+// reset watchdog: requires counter = time (sec) * freq (Hz)
 void feedWatchdog(unsigned long amount) {
   portENTER_CRITICAL(&mux_wd);
   wd_counter = wd_counter > static_cast<int32_t>(amount)
@@ -418,19 +455,30 @@ void limitOffset(int8_t* off) {
  */
 void displayOffset(int axle, int action) {
 
+  DisplayCommand params{};
+  params.type = DisplayCommandType::Body;
+  params.repeat = 500;
+
   enum class select { Rear, Front };
   enum class cmd { Reset, Set, Dn, Up };
 
-  const char* text = "AIRmatic";
-
   constexpr uint8_t num = 4;
-  static const char* lines[num];
+  const char* lines[num];
+  params.bodyLineCount = num;
 
-  static char offset[8];
+  char offset[8];
   int8_t value = 0;
 
   const char* chassis = nullptr;
   const char* level = nullptr;
+
+  if (displayQueue == nullptr || displayTaskHandle == nullptr) {
+    return;
+  }
+
+  if (!displayEnabled) {
+    displayInit();
+  }
 
   switch ((select)axle) {
     case select::Rear:  // MSG NAME: BUTTON_1_2 - Vorheriges Display, OFFSET 14, LENGTH 1
@@ -444,75 +492,127 @@ void displayOffset(int axle, int action) {
     default:
       return;
   }
-  snprintf(offset, sizeof(offset), "%+d mm", (int)value);
+  snprintf(offset, sizeof(offset), "%+dmm", (int)value);
   level = (value < 0) ? "tief" : "hoch";
 
   switch ((cmd)action) {
     case cmd::Reset:    // MSG NAME: BUTTON_4_2 - Telefon End, OFFSET 8, LENGTH 1
       lines[0] = mode.c_str();
-      lines[1] = chassis;
+      lines[1] = "reset";
       lines[2] = offset;
-      lines[3] = "RESET";
-      ic.initPage(
-        IC_PAGE_TELEPHONE,
-        text,
-        IC_TEXT_FMT_CENTER_JUSTIFICATION,
-        IC_SYMB_NONE,
-        IC_SYMB_NONE,
-        num
-      );
-      ic.setBodyTel(num, lines);
+      lines[3] = "..";
       break;
-
     case cmd::Set:      // MSG NAME: BUTTON_4_1 - Telefon Send, OFFSET 9, LENGTH 1
       lines[0] = mode.c_str();
-      lines[1] = chassis;
+      lines[1] = "gespeichert";
       lines[2] = offset;
       lines[3] = "OK";
-      ic.initPage(
-        IC_PAGE_TELEPHONE,
-        text,
-        IC_TEXT_FMT_CENTER_JUSTIFICATION,
-        IC_SYMB_NONE,
-        IC_SYMB_NONE,
-        num
-      );
-      ic.setBodyTel(num, lines);
       break;
-
     case cmd::Dn:       // MSG NAME: BUTTON_3_2 - Taste "-", OFFSET 10, LENGTH 1
       lines[0] = mode.c_str();
-      lines[1] = chassis;
+      lines[1] = level;
       lines[2] = offset;
-      lines[3] = level;
-      ic.initPage(
-        IC_PAGE_TELEPHONE,
-        text,
-        IC_TEXT_FMT_CENTER_JUSTIFICATION,
-        IC_SYMB_NONE,
-        IC_SYMB_DOWN_ARROW,
-        num
-      );
-      ic.setBodyTel(num, lines);
+      lines[3] = "-";
       break;
-
     case cmd::Up:       // MSG NAME: BUTTON_3_1 - Taste "+", OFFSET 11, LENGTH 1
       lines[0] = mode.c_str();
-      lines[1] = chassis;
+      lines[1] = level;
       lines[2] = offset;
-      lines[3] = level;
-      ic.initPage(
-        IC_PAGE_TELEPHONE,
-        text,
-        IC_TEXT_FMT_CENTER_JUSTIFICATION,
-        IC_SYMB_UP_ARROW,
-        IC_SYMB_NONE,
-        num
-      );
-      ic.setBodyTel(num, lines);
+      lines[3] = "+";
       break;
     default:
       return;
+  }
+  // async wrapper for ic.update(num, lines, 500)
+  for (uint8_t i = 0; i < params.bodyLineCount; ++i) {
+    snprintf(
+      params.bodyLines[i],
+      sizeof(params.bodyLines[i]),
+      "%s",
+      lines[i] != nullptr ? lines[i] : ""
+    );
+  }
+  if (xQueueSend(displayQueue, &params, 0) == pdPASS) {
+    xTaskNotify(displayTaskHandle, DISPLAY_NOTIFY_COMMAND, eSetBits);
+  }
+}
+
+// async wrapper for ic.update(text, 1000)
+void displayInit() {
+  DisplayCommand cmd{};
+  const char* text = "Niveau";
+  cmd.repeat = 1000;
+  cmd.type = DisplayCommandType::Page;
+  snprintf(cmd.pageText, sizeof(cmd.pageText), "%s", text);
+  displayStart = millis();
+  displayEnabled = true;
+  if (displayQueue == nullptr) {
+    displayQueue = xQueueCreate(8, sizeof(DisplayCommand));
+    if (displayQueue == nullptr) {
+      return;
+    }
+  }
+  if (displayTaskHandle == nullptr) {
+    const BaseType_t result = xTaskCreate(
+      displayTask,         // Task function
+      "Display Task",      // name of task
+      4096,                // Stack size of task
+      NULL,                // parameter of the task
+      1,                   // priority of the task
+      &displayTaskHandle); // Task handle to keep track of created task
+    if (result != pdPASS) {
+      displayTaskHandle = nullptr;
+      return;
+    }
+  }
+  if (xQueueSend(displayQueue, &cmd, 0) == pdPASS) {
+    xTaskNotify(displayTaskHandle, DISPLAY_NOTIFY_COMMAND, eSetBits);
+  }
+}
+
+// async wrapper for ic.update() service
+void displayUpdate() {
+  if (displayEnabled) {
+    if (millis() - displayStart > 60000UL) {
+      displayEnabled = false;
+      return;
+    }
+    if (displayTaskHandle != nullptr) {
+      xTaskNotify(displayTaskHandle, DISPLAY_NOTIFY_SERVICE, eSetBits);
+    }
+  }
+}
+
+// async wrapper task for ic.update([<args>...])
+void displayTask(void*) {
+  while (true) {
+    DisplayCommand cmd{};
+    unsigned long notifications = 0;
+    xTaskNotifyWait(
+      0,
+      UINT32_MAX,
+      &notifications,
+      portMAX_DELAY
+    );
+    while (xQueueReceive(displayQueue, &cmd, 0) == pdTRUE) {
+      if (cmd.type == DisplayCommandType::Page) {
+        // replay initPage() for 60 seconds
+        ic.update(cmd.pageText, cmd.repeat);
+      } else if (cmd.type == DisplayCommandType::Body) {
+        const char* lines[4] = {
+          cmd.bodyLines[0],
+          cmd.bodyLines[1],
+          cmd.bodyLines[2],
+          cmd.bodyLines[3]
+        };
+        // replay setBodyTel() for 10 seconds
+        ic.update(cmd.bodyLineCount, lines, cmd.repeat);
+      }
+    }
+    if ((notifications & DISPLAY_NOTIFY_SERVICE) != 0) {
+      // service scheduled replays from loop()
+      ic.update();
+    }
   }
 }
 
@@ -520,22 +620,30 @@ void displayOffset(int axle, int action) {
 void updateMode() {
   if (st2_bet || st3_bet) {
     // do not distract ESP with CAN message replay
-    if (!( ZGW_248h.BN_NTLF   ||
-           ZGW_248h.ESP_BET   ||
-           ZGW_248h.PTS_BET   ||
-           ZGW_248h.CRASH     ||
-           ZGW_248h.CRASH_CNF ||
-           ZGW_248h.X_CRASH      )) {
+    if (!( EZS_240h.CRASH         ||       // Crash signal from airbag SG
+           EZS_240h.CRASH_CNF     ||       // CRASH confirm bit
+           EZS_240h.ASG_SPORT_BET ||       // ASG sport mode on/off actuated (ST2_LED_DL if ABC available)
+           EZS_240h.BN_SOCS       ||       // Vehicle electrical system warning: starter battery state of charge
+           EZS_240h.BLI_LI        ||       // Turn signal left
+           EZS_240h.BLI_RE        ||       // Turn signal right
+           EZS_240h.ESP_BET       ||       // ESP on/off actuated
+           EZS_240h.BN_NTLF       ||       // Vehicle power supply emergency mode: Prio1 and Prio2 consumers off, second battery supports
+           EZS_240h.ABL_EIN       ||       // Turn on low beam
+           EZS_240h.ART_ABW_BET      )) {  // ART distance warning on/off actuated
+      xSemaphoreTake(canMutex, portMAX_DELAY);
       if (st2_bet) {
-        ZGW_248h.ST2_BET = st2_bet & 0x03; // DESC: ST2_BET - LF/ABC 2-position switch actuated
+        EZS_240h.ST2_BET = st2_bet & 0x03; // LF/ABC 2-position switch actuated
         st2_bet = 0;
       }
       if (st3_bet) {
-        ZGW_248h.ST3_BET = st3_bet & 0x03; // DESC: ST3_BET - LF/ABC 3-position switch operated
+        EZS_240h.ST3_BET = st3_bet & 0x03; // LF/ABC 3-position switch operated
         st3_bet = 0;
       }
-      // replay last received CAN message whatever it contains + pressed AIRmatic mode button
-      sendMsg(&mbox0, CANID0, &ZGW_248h, sizeof(ZGW_248h), 1);
+      if (can0) {
+        // replay last received CAN message whatever it contains + pressed AIRmatic mode button
+        sendMsg(&mbox0, CANID4, &EZS_240h, sizeof(EZS_240h), 1);
+      }
+      xSemaphoreGive(canMutex);
       blink(LED_BUILTIN, 100);
     }
   }
@@ -544,7 +652,7 @@ void updateMode() {
 // read config.json file from LittleFS
 JsonDocument readConfig() {
   for (uint8_t i = 0; jsonBusy && i < 10; i++) {
-    delay_us(5000);
+    delay(5);
   }
   if (!jsonBusy) {
     jsonBusy = true;
@@ -702,7 +810,7 @@ void go_to_sleep(unsigned int timeout) {
     // put TJA1055 into go-to-sleep
     if (!wifiConnected) {
       digitalWrite(STB, LOW);
-      delay_us(1000);
+      delay(1);
       digitalWrite(EN, LOW);
     }
   }
@@ -733,6 +841,9 @@ void awake(unsigned int delayMs) {
 
 void setup() {
 
+  // Watchdog output 1 Hz
+  startWatchdog(WO, 1);
+
   pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.begin(115200, SERIAL_8N1, RX0, TX0);
@@ -753,12 +864,18 @@ void setup() {
   // protects shared SPI access between Can0, Can1
   spiMutex = xSemaphoreCreateMutexStatic(&spiMutexBuffer);
 
+  // thread-safe access can data structs
+  canMutex = xSemaphoreCreateMutex();
+
+  // debug can stats
+  initCanStatsMutexes();
+
   Can0 = new MCP2515(CS0); // CS -> GPIO5
   Can1 = new MCP2515(CS1); // CS -> GPIO15
 
-  Can0->reset();
-  Can1->reset();
-  delay_us(1000);
+  can0 = (Can0->reset() == MCP2515::ERROR_OK);
+  can1 = (Can1->reset() == MCP2515::ERROR_OK);
+  delay(1);
 
   Can0->setBitrate(CAN_500KBPS, MCP_8MHZ); // Motor CAN-C High speed
   Can1->setBitrate(CAN_83K3BPS, MCP_16MHZ); // Interior CAN-B Low speed
@@ -784,6 +901,7 @@ void setup() {
   Can1->setFilterMask(MCP2515::MASK1, false, 0x7FF); // Standard ID mask = 11 bits
   Can1->setFilter(MCP2515::RXF2, false, CANID2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
   Can1->setFilter(MCP2515::RXF3, false, CANID3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
+  Can1->setFilter(MCP2515::RXF4, false, CANID6); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
 
   if (Can0->setNormalOneShotMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
@@ -802,25 +920,29 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(INT0), onCanInterrupt0, FALLING);
   attachInterrupt(digitalPinToInterrupt(INT1), onCanInterrupt1, FALLING);
 
-  // create a task that will be executed along the loop() function, with priority 3 and executed on core 0
-  xTaskCreatePinnedToCore(
-    canEvent0,     // Task function
-    "Can0 Events", // name of task
-    4096,          // Stack size of task
-    NULL,          // parameter of the task
-    3,             // priority of the task
-    &canTask0,     // Task handle to keep track of created task
-    0);            // pin task to core 0
-  
-  // create a task that will be executed along the loop() function, with priority 2 and executed on core 1
-  xTaskCreatePinnedToCore(
-    canEvent1,     // Task function
-    "Can1 Events", // name of task
-    4096,          // Stack size of task
-    NULL,          // parameter of the task
-    2,             // priority of the task
-    &canTask1,     // Task handle to keep track of created task
-    1);            // pin task to core 1
+  if (can0) {
+    // create a task that will be executed along the loop() function, with priority 2 and executed on core 0
+    xTaskCreatePinnedToCore(
+      canEvent0,     // Task function
+      "Can0 Events", // name of task
+      4096,          // Stack size of task
+      NULL,          // parameter of the task
+      2,             // priority of the task
+      &canTask0,     // Task handle to keep track of created task
+      0);            // pin task to core 0
+  }
+
+  if (can1) {
+    // create a task that will be executed along the loop() function, with priority 2 and executed on core 1
+    xTaskCreatePinnedToCore(
+      canEvent1,     // Task function
+      "Can1 Events", // name of task
+      4096,          // Stack size of task
+      NULL,          // parameter of the task
+      2,             // priority of the task
+      &canTask1,     // Task handle to keep track of created task
+      1);            // pin task to core 1
+  }
 
   (void) readConfig();
   wifiSetup();
@@ -848,9 +970,6 @@ void setup() {
   pinMode(ON, OUTPUT);
   digitalWrite(ON, HIGH);
 
-  // Watchdog output 1 Hz
-  startWatchdog(WO, 1);
-
   // DAC offset voltage generator 4 kHz
   ledcAttach(PWM1, freq, res);
   ledcAttach(PWM2, freq, res);
@@ -863,7 +982,8 @@ void setup() {
 
 void loop() {
 
-  static uint8_t ic_stat = 0;
+  static bool isInPage;
+  static uint8_t ic_stat = 255;
   static String lastMode = mode;
   static unsigned long timeMs = millis();
 
@@ -937,10 +1057,12 @@ void loop() {
   }
 
   // check display is in phone mode
-  if (KOMBI_A5.KI_STAT) {
+  if ((KOMBI_A5.KI_STAT != ic_stat) && KOMBI_A5.KI_STAT) {
+    isInPage = false;
     ic_stat = KOMBI_A5.KI_STAT;
+    KOMBI_A5.KI_STAT = 0;
   }
-  if (ic_stat == 5) {
+  if ((ic_stat == 5) && isInPage) {
     // get keyevents
     // FRONT + HIGHER
     button7 = KOMBI_A5.BUTTON_1_1;
@@ -1029,6 +1151,13 @@ void loop() {
       blink(LED_BUILTIN, 100);
       displayOffset(0, 0); // select::Rear + cmd::Reset
     }
+    displayUpdate();
+    if (!displayEnabled) {
+      ic_stat = 255;
+    }
+  } else if (ic_stat == 5) {
+    isInPage = true;
+    displayInit();
   }
 
   // DAC offset voltage output
@@ -1038,6 +1167,9 @@ void loop() {
     ledcWrite(PWM2, duty + calib_vr - offset_nv * factor); // NVRS1 / inverted, requires negative offset
     ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
     ledcWrite(PWM4, duty + calib_hl - offset_nh * factor); // NHLS1 / not available for 211/219
+
+    if (can0) resetDataCanC(CAN_DATA_EXPIRY_MS);
+    if (can1) resetDataCanB(CAN_DATA_EXPIRY_MS);
 
     feedWatchdog(10); // 10 sec
   }
@@ -1049,5 +1181,6 @@ void loop() {
   if (timeMs > 600000000) {
     scheduleReboot(5000);
   }
+  handleReboot();
   delay(10);
 }

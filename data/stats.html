@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body {
+        pointer-events: none;
+        font-family: "Gill Sans", "Trebuchet MS", sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 20px;
+      }
+      h2 {
+        border-bottom: 2px solid #ccc;
+        padding-bottom: 5px;
+      }
+      .card {
+        background: white;
+        padding: 15px;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .value {
+        font-weight: bold;
+        color: #0066cc;
+      }
+      .sub {
+        font-size: 0.9em;
+        color: #666;
+      }
+      .config-info {
+        font-size: 0.85em;
+        color: #444;
+        background: #eef2f7;
+        padding: 6px 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      .status-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-left: 8px;
+        border-radius: 50%;
+        background-color: #999;
+        vertical-align: middle;
+      }
+      .status-dot.online {
+        background-color: #28a745;
+      }
+      .status-dot.offline {
+        background-color: #dc3545;
+      }
+    </style>
+  </head>
+  <body>
+
+    <h2>CAN Bus Statistics</h2>
+
+    <div class="card" id="can0-box">
+      <h3>CAN0 - Motor CAN-C <span class="status-dot" id="c0-status" aria-label="Status unknown"></span></h3>
+      <div class="config-info">
+        Speed: <b>500 kbps</b> | Clock: <b>8 MHz</b> | CS=5 INT=34
+      </div>
+      <p>Count: <span class="value" id="c0-count">0</span></p>
+      <p>Max Interval: <span class="value" id="c0-max">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c0-max-rate">0.0</span> /s)</span></p>
+      <p>Min Interval: <span class="value" id="c0-min">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c0-min-rate">0.0</span> /s)</span></p>
+      <p>Avg Interval: <span class="value" id="c0-avg">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c0-avg-rate">0.0</span> /s)</span></p>
+      <p>Cur Interval: <span class="value" id="c0-cur">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c0-cur-rate">0.0</span> /s)</span></p>
+    </div>
+
+    <div class="card" id="can1-box">
+      <h3>CAN1 - Interior CAN-B <span class="status-dot" id="c1-status" aria-label="Status unknown"></span></h3>
+      <div class="config-info">
+        Speed: <b>83.3 kbps</b> | Clock: <b>16 MHz</b> | CS=15 INT=35
+      </div>
+      <p>Count: <span class="value" id="c1-count">0</span></p>
+      <p>Max Interval: <span class="value" id="c1-max">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c1-max-rate">0.0</span> /s)</span></p>
+      <p>Min Interval: <span class="value" id="c1-min">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c1-min-rate">0.0</span> /s)</span></p>
+      <p>Avg Interval: <span class="value" id="c1-avg">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c1-avg-rate">0.0</span> /s)</span></p>
+      <p>Cur Interval: <span class="value" id="c1-cur">0.0</span> ms <span class="sub">(Rate: <span class="value" id="c1-cur-rate">0.0</span> /s)</span></p>
+    </div>
+
+    <script>
+      function fetchStats() {
+        fetch('/config.json')
+          .then(response => response.json())
+          .then(data => {
+            if (data && data.stats) {
+              ['can0', 'can1'].forEach((c, idx) => {
+                if (data.stats[c]) {
+                  const statusDot = document.getElementById(prefix + '-status');
+                  const isOnline = Number(s.cur_ms) !== 0;
+                  const s = data.stats[c];
+                  const prefix = 'c' + idx;
+                  document.getElementById(prefix + '-count').innerText = s.count;
+                  // Max
+                  document.getElementById(prefix + '-max').innerText = Number(s.max_ms).toFixed(1);
+                  document.getElementById(prefix + '-max-rate').innerText = s.max_ms > 0 ? (1000 / s.max_ms).toFixed(1) : '0.0';
+                  // Min
+                  document.getElementById(prefix + '-min').innerText = Number(s.min_ms).toFixed(2);
+                  document.getElementById(prefix + '-min-rate').innerText = s.min_ms > 0 ? (1000 / s.min_ms).toFixed(1) : '0.0';
+                  // Avg
+                  document.getElementById(prefix + '-avg').innerText = Number(s.avg_ms).toFixed(1);
+                  document.getElementById(prefix + '-avg-rate').innerText = s.avg_ms > 0 ? (1000 / s.avg_ms).toFixed(1) : '0.0';
+                  // Cur
+                  document.getElementById(prefix + '-cur').innerText = Number(s.cur_ms).toFixed(1);
+                  document.getElementById(prefix + '-cur-rate').innerText = s.cur_ms > 0 ? (1000 / s.cur_ms).toFixed(1) : '0.0';
+
+                  statusDot.classList.toggle('online', isOnline);
+                  statusDot.classList.toggle('offline', !isOnline);
+                  statusDot.setAttribute('aria-label', isOnline ? 'Online' : 'Offline');
+                }
+              });
+            }
+          })
+      }
+
+      setInterval(fetchStats, 1000);
+    </script>
+  </body>
+</html>
