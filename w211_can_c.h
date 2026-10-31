@@ -282,19 +282,6 @@ typedef struct MS_608h_t {
   uint8_t T_MOT                   : 8; // DESC: T_MOT - engine coolant temperature, OFFSET: 0, LEN: 8
   uint8_t T_LUFT                  : 8; // DESC: T_LUFT - intake air temperature, OFFSET: 8, LEN: 8
 // byte 2
-  uint8_t FCOD_KAR                : 3; // DESC: FCOD_KAR - vehicle code body, OFFSET: 16, LEN: 3
-/*
-  enum class FCOD_KAR_c : uint8_t {    // DESC: FCOD_KAR - vehicle code body, OFFSET: 16, LEN: 3
-    W                             = 0, // enum: 0 - Limousine (or G for short BM1 / 3 for BR 463, G for 461) / W
-    V                             = 1, // enum: 1 - sedan long (or VF with BR 210/211, G long BM6 with BR 463) / V
-    C                             = 2, // enum: 2 - Coupé (or VV for BR 210/211/220) / C
-    S                             = 3, // enum: 3 - T-Model (or special protection B4 for BR W240, T for BR 245) / S
-    A                             = 4, // enum: 4 - Cabrio (or X with BR 164) / A
-    R                             = 5, // enum: 5 - Roadster (or special protection B4 for BR 210/211/220 / V240) / R
-    SS                            = 6, // enum: 6 - special protection B6 / 7 (or CL for BR 203) / SS
-    SNV                           = 7, // enum: 7 - code does not exist / SNV
-  } : 3; FCOD_KAR_c FCOD_KAR;
-*/
   uint8_t FCOD_BR                 : 5; // DESC: FCOD_BR - vehicle code series, OFFSET: 19, LEN: 5
 /*
   enum class FCOD_BR_c : uint8_t {     // DESC: FCOD_BR - vehicle code series, OFFSET: 19, LEN: 5
@@ -332,21 +319,35 @@ typedef struct MS_608h_t {
     SNV                           = 31, // enum: 31 - code does not exist / SNV
   } : 5; FCOD_BR_c FCOD_BR;
 */
+  uint8_t FCOD_KAR                : 3; // DESC: FCOD_KAR - vehicle code body, OFFSET: 16, LEN: 3
+/*
+  enum class FCOD_KAR_c : uint8_t {    // DESC: FCOD_KAR - vehicle code body, OFFSET: 16, LEN: 3
+    W                             = 0, // enum: 0 - Limousine (or G for short BM1 / 3 for BR 463, G for 461) / W
+    V                             = 1, // enum: 1 - sedan long (or VF with BR 210/211, G long BM6 with BR 463) / V
+    C                             = 2, // enum: 2 - Coupé (or VV for BR 210/211/220) / C
+    S                             = 3, // enum: 3 - T-Model (or special protection B4 for BR W240, T for BR 245) / S
+    A                             = 4, // enum: 4 - Cabrio (or X with BR 164) / A
+    R                             = 5, // enum: 5 - Roadster (or special protection B4 for BR 210/211/220 / V240) / R
+    SS                            = 6, // enum: 6 - special protection B6 / 7 (or CL for BR 203) / SS
+    SNV                           = 7, // enum: 7 - code does not exist / SNV
+  } : 3; FCOD_KAR_c FCOD_KAR;
+*/
 // byte 3
-  bool FCOD_MOT6                  : 1; // DESC: FCOD_MOT6 - Vehicle code engine with 7 bits, bit 6, OFFSET: 24, LEN: 1
-  bool GS_NVH                     : 1; // DESC: GS_NVH - transmission control not available, OFFSET: 25, LEN: 1
   uint8_t FCOD_MOT0               : 6; // DESC: FCOD_MOT - Vehicle code engine 7Bit, Bit0-5 (Bit6 -> Signal FCOD_MOT6), OFFSET: 26, LEN: 6
 /*
   enum class FCOD_MOT0_c : uint8_t {
     // ... section extra bytes -> FCOD_MOT
   } : 6; FCOD_MOT_c FCOD_MOT0;
 */
+  bool GS_NVH                     : 1; // DESC: GS_NVH - transmission control not available, OFFSET: 25, LEN: 1
+  bool FCOD_MOT6                  : 1; // DESC: FCOD_MOT6 - Vehicle code engine with 7 bits, bit 6, OFFSET: 24, LEN: 1
 // byte 4
   uint8_t V_MAX_FIX               : 8; // DESC: V_MAX_FIX - Fixed maximum speed, OFFSET: 32, LEN: 8
 // byte 5+6
   uint16_t VB                     : 16; // DESC: VB - consumption, OFFSET: 40, LEN: 16
 // byte 7
-  bool ZWP_EIN_MS                 : 1; // DESC: ZWP_EIN_MS - switch on additional water pump, OFFSET: 56, LEN: 1
+  uint8_t PFKO                    : 4; // DESC: PFKO - Particle filter correction offset FMMOTMAX, OFFSET: 60, LEN: 4
+  bool ZVB_EIN_MS                 : 1; // DESC: ZVB_EIN_MS - switch on additional consumer, OFFSET: 59, LEN: 1
   uint8_t PFW                     : 2; // DESC: PFW - Particle filter warning, OFFSET: 57, LEN: 2
 /*
   enum class PFW_c : uint8_t {         // DESC: PFW - Particle filter warning, OFFSET: 57, LEN: 2
@@ -356,13 +357,11 @@ typedef struct MS_608h_t {
     SNV                           = 3, // enum: 3 - signal not available / SNV
   } : 2; PFW_c PFW;
 */
-  bool ZVB_EIN_MS                 : 1; // DESC: ZVB_EIN_MS - switch on additional consumer, OFFSET: 59, LEN: 1
-  uint8_t PFKO                    : 4; // DESC: PFKO - Particle filter correction offset FMMOTMAX, OFFSET: 60, LEN: 4
+  bool ZWP_EIN_MS                 : 1; // DESC: ZWP_EIN_MS - switch on additional water pump, OFFSET: 56, LEN: 1
 /* <- End of CAN Frame */
 
 // extra bytes -> must set extern
 // byte 8
-//  uint8_t                         : 1; // Padding, OFFSET: 64, LEN: 1
 //  uint8_t FCOD_MOT                : 7; // DESC: FCOD_MOT - Vehicle code engine 7Bit, (concatenated FCOD_MOT0 + FCOD_MOT6)
 /*
   enum class FCOD_MOT_c : uint8_t {    // DESC: FCOD_MOT - Vehicle code engine 7Bit, (concatenated FCOD_MOT0 + FCOD_MOT6)
@@ -418,6 +417,7 @@ typedef struct MS_608h_t {
     OM642DE30LARED140             = 99, // enum: 99 - OM642 DE30 LA red. (140kW) / OM642DE30LARED140
   } : 7; FCOD_MOT_c FCOD_MOT;
 */
+//  uint8_t                         : 1; // Padding, OFFSET: 64, LEN: 1
 } __attribute__((__packed__)) MS_608h_t;
 
 

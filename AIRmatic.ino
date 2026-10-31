@@ -241,6 +241,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
       break;
     case CANID5:
       copyMsg(&MS_608h);  // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
+      MS_608h.VB = __builtin_bswap16(MS_608h.VB);
 /*
       MS_608h.FCOD_MOT =
         (MS_608h.FCOD_MOT0 & 0x3F) | // Vehicle code engine 7Bit, Bit0-5 (Bit6 -> Signal FCOD_MOT6)
@@ -249,6 +250,7 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
       break;
     case CANID6:
       copyMsg(&TP_KOMBI_AGW1); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+      TP_KOMBI_AGW1.TP_KOMBI_AGW = __builtin_bswap64(TP_KOMBI_AGW1.TP_KOMBI_AGW);
       break;
   }
 }
