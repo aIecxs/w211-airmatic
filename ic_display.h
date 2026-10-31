@@ -67,14 +67,14 @@ class IC_DISPLAY {
         void update();
 
         /**
-         * Register a page for periodic replay
+         * Register a page for pending replay
          */
-        void update(const char* pageText, unsigned long repeat);
+        void update(const char* pageText);
 
         /**
          * Register a body for replay until 10 seconds after registration
          */
-        void update(uint8_t bodyLineCount, const char* const* bodyLines, unsigned long repeat);
+        void update(const char* pageText, uint8_t bodyLineCount, const char* const* bodyLines, unsigned long repeat);
 
         /**
          * Used to store the current page on the IC being active
@@ -134,18 +134,14 @@ class IC_DISPLAY {
 
     private:
         // hardcoded expiry time of the replay - adjust here
-        static constexpr unsigned long PAGE_REPLAY_LIFETIME_MS = 600000;
         static constexpr unsigned long BODY_REPLAY_LIFETIME_MS = 10000;
         static constexpr uint8_t MAX_BODY_LINES = 4;
         static constexpr size_t REPLAY_LINE_SIZE = 32;
 
         // Page replay state
+        char pendingPageText[32] = {};
         char replayPageText[32] = {};
         bool replayPageEnabled = false;
-        uint8_t replayPageLineCount = MAX_BODY_LINES;
-        unsigned long replayPageRepeat = 0;
-        unsigned long replayPageLastAt = 0;
-        unsigned long replayPageStartedAt = 0;
 
         // Body replay state
         char replayBody[MAX_BODY_LINES][REPLAY_LINE_SIZE] = {};

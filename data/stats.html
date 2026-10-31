@@ -91,10 +91,10 @@
             if (data && data.stats) {
               ['can0', 'can1'].forEach((c, idx) => {
                 if (data.stats[c]) {
-                  const statusDot = document.getElementById(prefix + '-status');
-                  const isOnline = Number(s.cur_ms) !== 0;
                   const s = data.stats[c];
+                  const isOnline = Number(s.cur_ms) !== 0;
                   const prefix = 'c' + idx;
+                  const statusDot = document.getElementById(prefix + '-status');
                   document.getElementById(prefix + '-count').innerText = s.count;
                   // Max
                   document.getElementById(prefix + '-max').innerText = Number(s.max_ms).toFixed(1);

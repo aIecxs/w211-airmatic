@@ -478,6 +478,8 @@ void displayOffset(int axle, int action) {
 
   if (!displayEnabled) {
     displayInit();
+  } else {
+    displayStart = millis();
   }
 
   switch ((select)axle) {
@@ -497,26 +499,26 @@ void displayOffset(int axle, int action) {
 
   switch ((cmd)action) {
     case cmd::Reset:    // MSG NAME: BUTTON_4_2 - Telefon End, OFFSET 8, LENGTH 1
-      lines[0] = mode.c_str();
-      lines[1] = "reset";
+      lines[0] = "reset";
+      lines[1] = mode.c_str();
       lines[2] = offset;
-      lines[3] = "..";
+      lines[3] = "";
       break;
     case cmd::Set:      // MSG NAME: BUTTON_4_1 - Telefon Send, OFFSET 9, LENGTH 1
-      lines[0] = mode.c_str();
-      lines[1] = "gespeichert";
+      lines[0] = "gespeichert";
+      lines[1] = mode.c_str();
       lines[2] = offset;
       lines[3] = "OK";
       break;
     case cmd::Dn:       // MSG NAME: BUTTON_3_2 - Taste "-", OFFSET 10, LENGTH 1
-      lines[0] = mode.c_str();
-      lines[1] = level;
+      lines[0] = level;
+      lines[1] = mode.c_str();
       lines[2] = offset;
       lines[3] = "-";
       break;
     case cmd::Up:       // MSG NAME: BUTTON_3_1 - Taste "+", OFFSET 11, LENGTH 1
-      lines[0] = mode.c_str();
-      lines[1] = level;
+      lines[0] = level;
+      lines[1] = mode.c_str();
       lines[2] = offset;
       lines[3] = "+";
       break;
@@ -532,16 +534,16 @@ void displayOffset(int axle, int action) {
       lines[i] != nullptr ? lines[i] : ""
     );
   }
+  snprintf(params.pageText, sizeof(params.pageText), "%s", chassis);
   if (xQueueSend(displayQueue, &params, 0) == pdPASS) {
     xTaskNotify(displayTaskHandle, DISPLAY_NOTIFY_COMMAND, eSetBits);
   }
 }
 
-// async wrapper for ic.update(text, 1000)
+// async wrapper for ic.update(text)
 void displayInit() {
   DisplayCommand cmd{};
   const char* text = "Niveau";
-  cmd.repeat = 1000;
   cmd.type = DisplayCommandType::Page;
   snprintf(cmd.pageText, sizeof(cmd.pageText), "%s", text);
   displayStart = millis();
@@ -596,8 +598,8 @@ void displayTask(void*) {
     );
     while (xQueueReceive(displayQueue, &cmd, 0) == pdTRUE) {
       if (cmd.type == DisplayCommandType::Page) {
-        // replay initPage() for 60 seconds
-        ic.update(cmd.pageText, cmd.repeat);
+        // send initPage()
+        ic.update(cmd.pageText);
       } else if (cmd.type == DisplayCommandType::Body) {
         const char* lines[4] = {
           cmd.bodyLines[0],
@@ -606,7 +608,7 @@ void displayTask(void*) {
           cmd.bodyLines[3]
         };
         // replay setBodyTel() for 10 seconds
-        ic.update(cmd.bodyLineCount, lines, cmd.repeat);
+        ic.update(cmd.pageText, cmd.bodyLineCount, lines, cmd.repeat);
       }
     }
     if ((notifications & DISPLAY_NOTIFY_SERVICE) != 0) {
@@ -1168,8 +1170,8 @@ void loop() {
     ledcWrite(PWM3, duty + calib_hr + offset_nh * factor); // NHRS1
     ledcWrite(PWM4, duty + calib_hl - offset_nh * factor); // NHLS1 / not available for 211/219
 
-    if (can0) resetDataCanC(CAN_DATA_EXPIRY_MS);
-    if (can1) resetDataCanB(CAN_DATA_EXPIRY_MS);
+    if (can0) clearCan0(CAN_DATA_EXPIRY_MS);
+    if (can1) clearCan1(CAN_DATA_EXPIRY_MS);
 
     feedWatchdog(10); // 10 sec
   }

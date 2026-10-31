@@ -3,6 +3,10 @@
 
 #include <Arduino.h>
 #include <mcp2515.h>
+#include "w211_can_b.h"
+
+extern SemaphoreHandle_t canMutex;
+extern TP_KOMBI_AGW1_t TP_KOMBI_AGW1;
 
 //#define DEBUG
 #ifdef DEBUG

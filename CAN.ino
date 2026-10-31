@@ -209,7 +209,7 @@ void sendMsg(mbx_t *mbox, canid_t id, const void *msg, size_t len, uint8_t repea
   for (uint8_t i = 0; i < repeat; i++) {
     if (!enqueueFrame(mbox, &buf)) {
       Serial.printf(
-        "Message not sent: CanId 0x%04X: send mailbox capacity exceeded!\n",
+        "Message not sent: CanId 0x%04X: send mailbox capacity exceeded!\r\n",
         buf.can_id
       );
       delay(100);
@@ -233,7 +233,7 @@ void sendMbx(MCP2515 *can, mbx_t *mbox, unsigned long min_interval_ms) {
   }
 }
 
-void resetDataCanC(unsigned long timeout_ms) {
+void clearCan0(unsigned long timeout_ms) {
   static unsigned long now_ms = 0;
   static long long last_flushed = -1;
   if (millis() - now_ms > timeout_ms) {
@@ -254,7 +254,7 @@ void resetDataCanC(unsigned long timeout_ms) {
   }
 }
 
-void resetDataCanB(unsigned long timeout_ms) {
+void clearCan1(unsigned long timeout_ms) {
   static unsigned long now_ms = 0;
   static long long last_flushed = -1;
   if (millis() - now_ms > timeout_ms) {

@@ -1,13 +1,8 @@
 #include "can_comm.h"
-#include "w211_can_b.h"
 
 struct mbx_t;
 extern mbx_t mbox0;
 extern mbx_t mbox1;
-
-extern bool can1;
-extern SemaphoreHandle_t canMutex;
-extern TP_KOMBI_AGW1_t TP_KOMBI_AGW1;
 
 extern void sendMsg(mbx_t *mbox, canid_t id, const void *msg, size_t len, uint8_t repeat);
 
@@ -62,37 +57,24 @@ void CANBUS_COMMUNICATOR::sendToBus(can_frame *send) {
 
 can_frame *CANBUS_COMMUNICATOR::read_frame() {
     unsigned long timeout = millis();
-    if (can1) {
+    read.can_id = 0x1D0;
+    read.can_dlc = 0x08;
+    while (true) {
         if (TP_KOMBI_AGW1.TP_KOMBI_AGW != 0xDEADBEEF00000000) {
-            xSemaphoreTake(canMutex, portMAX_DELAY);
-            TP_KOMBI_AGW1.TP_KOMBI_AGW = 0xDEADBEEF00000000;
-            xSemaphoreGive(canMutex);
+            break;
         }
-        read.can_id = 0x1D0;
-        read.can_dlc = 0x08;
-        while (can1) {
-            if (TP_KOMBI_AGW1.TP_KOMBI_AGW != 0xDEADBEEF00000000) {
-                break;
-            }
-            if (millis() - timeout > 200) {
-              read.can_id = 0x00;
-              read.can_dlc = 0x00;
-              return &read;
-            }
+        if (millis() - timeout > 0) {
+            read.can_id = 0x00;
+            read.can_dlc = 0x00;
+            return &read;
         }
-        xSemaphoreTake(canMutex, portMAX_DELAY);
-        for (int i = 0; i < read.can_dlc; i++) {
-            read.data[i] = (uint8_t)((TP_KOMBI_AGW1.TP_KOMBI_AGW >> (i * 8)) & 0xFF);
-        }
-        xSemaphoreGive(canMutex);
-    } else {
-        // Setup default Error frame
-        read.can_id = 0x00;
-        read.can_dlc = 0x00;
-        // Try and read a frame from Bus. If frame cannot be read, then the read frame
-        // Retains its data
-//        mcp->readMessage(&read);
+        portYIELD();
     }
+    xSemaphoreTake(canMutex, portMAX_DELAY);
+    for (int i = 0; i < read.can_dlc; i++) {
+        read.data[i] = (uint8_t)((TP_KOMBI_AGW1.TP_KOMBI_AGW >> (i * 8)) & 0xFF);
+    }
+    xSemaphoreGive(canMutex);
     return &read;
 }
 
