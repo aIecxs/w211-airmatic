@@ -64,12 +64,12 @@ class IC_DISPLAY {
         /**
          * Call regularly from loop() to service scheduled replays
          */
-        void update();
+        bool update();
 
         /**
-         * Register a page for pending replay
+         * Register a page for periodic replay
          */
-        void update(const char* pageText);
+        void update(const char* pageText, unsigned long repeat);
 
         /**
          * Register a body for replay until 10 seconds after registration
@@ -97,7 +97,7 @@ class IC_DISPLAY {
          * @param fmt Format byte. This should be set by bitwise & IC_TEXT_FMT bytes.
          * if false, then text is left justified.
          */
-        void setHeader(uint8_t p, const char* text, uint8_t fmt);
+        bool setHeader(uint8_t p, const char* text, uint8_t fmt);
 
         /**
          * Sends the body text to the instrument cluster using package 26
@@ -107,13 +107,13 @@ class IC_DISPLAY {
          * @param fmt Format byte. This should be set by bitwise & IC_TEXT_FMT bytes.
          * if false, then text is left justified.
          */
-        void setBody(uint8_t p, const char* text, uint8_t fmt);
+        bool setBody(uint8_t p, const char* text, uint8_t fmt);
 
         /**
          * To be only used by the Telephone page! (Audio page only can have 1 line of text)
          * Sends data about up to 4 lines of text to be displayed on the IC
          */
-        void setBodyTel(uint8_t numStrs, const char* lines[]);
+        bool setBodyTel(uint8_t numStrs, const char* lines[]);
         
         /**
          * Sends Package 24 to display to tell it how to format the page.
@@ -124,7 +124,7 @@ class IC_DISPLAY {
          * @param upper_Symbol Symbol above body text (IC_SYMB)
          * @param lower_Symbol Symbol below body text (IC_SYMB)
          */
-        void initPage(uint8_t p, const char* header, uint8_t fmt, uint8_t upper_Symbol, uint8_t lower_Symbol, uint8_t numLines);
+        bool initPage(uint8_t p, const char* header, uint8_t fmt, uint8_t upper_Symbol, uint8_t lower_Symbol, uint8_t numLines);
 
         /**
          * Processes an incomming can frame from the IC display
@@ -134,6 +134,7 @@ class IC_DISPLAY {
 
     private:
         // hardcoded expiry time of the replay - adjust here
+        static constexpr unsigned long PAGE_REPLAY_LIFETIME_MS = 600000;
         static constexpr unsigned long BODY_REPLAY_LIFETIME_MS = 10000;
         static constexpr uint8_t MAX_BODY_LINES = 4;
         static constexpr size_t REPLAY_LINE_SIZE = 32;
@@ -142,6 +143,9 @@ class IC_DISPLAY {
         char pendingPageText[32] = {};
         char replayPageText[32] = {};
         bool replayPageEnabled = false;
+        unsigned long replayPageRepeat = 0;
+        unsigned long replayPageLastAt = 0;
+        unsigned long replayPageStartedAt = 0;
 
         // Body replay state
         char replayBody[MAX_BODY_LINES][REPLAY_LINE_SIZE] = {};
@@ -150,6 +154,35 @@ class IC_DISPLAY {
         unsigned long replayBodyRepeat = 0;
         unsigned long replayBodyLastAt = 0;
         unsigned long replayBodyStartedAt = 0;
+
+        // ack and flow control timeout
+        static constexpr unsigned long FC_TIMEOUT_MS = 20;
+
+        // step size for polling
+        static constexpr unsigned long POLL_STEP_MS = 2;
+
+        // ACK Flags
+        struct ack_t {
+            bool isFlag = false;    // true if collected, false if processed
+            bool ack = false;       // true if 0x06, false if 0x15
+            uint8_t page = 0;
+            unsigned long timestamp = 0; // last seen
+        };
+
+        // Flow Control parameters
+        struct flowControl_t {
+            ack_t initPage;
+            ack_t body;
+            ack_t header;
+            ack_t other;
+            uint8_t state = 0;      // CTS / WAIT / OVFLW
+            uint8_t bs = 0;         // consecutive frames count
+            uint8_t stMin = 0;      // STmin minimum delay between CFs
+            unsigned long timestamp = 0; // last seen
+        };
+
+        /** Used to store ack timestamps */
+        flowControl_t fc;
 
         /** Used to store payload buffer */
         uint8_t buffer[55] = { 0x00 };
@@ -161,7 +194,7 @@ class IC_DISPLAY {
          * Sends [buffer] in a wrapped ISO 15765-2 protocol.
          * Up to a maximum of 8 can frames can be sent to the IC at a time.
          */
-        void sendBytes(int pre_delay, int post_delay);
+        bool sendBytes(int pre_delay, int post_delay);
 
         can_frame x;
 
@@ -173,6 +206,19 @@ class IC_DISPLAY {
         uint8_t getChecksum(uint8_t len, uint8_t* payload);
 
         void wait(unsigned long msec);
+
+        /**
+         * True if any ACK (ours or a foreign one, any page/packet,
+         * success or fail - we don't care which) was seen within the
+         * last FC_TIMEOUT_MS. Used as a "bus likely has a free gap"
+         */
+        bool receivedACK();
+
+        /**
+         * True if the last flow-control frame is a fresh (within
+         * FC_TIMEOUT_MS) Clear-To-Send (0x30).
+         */
+        bool receivedFC();
 
         CANBUS_COMMUNICATOR *canB;
 };

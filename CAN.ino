@@ -69,6 +69,11 @@ void initCanStatsMutexes() {
   can1_stats.mutex = xSemaphoreCreateMutex();
 }
 
+void initMailboxMutexes() {
+  mbox0.mutex = xSemaphoreCreateMutex();
+  mbox1.mutex = xSemaphoreCreateMutex();
+}
+
 void canEvent0(void *pvParameters) {
   bool rxbox0 = false;
   bool rxbox1 = false;
@@ -180,25 +185,29 @@ void IRAM_ATTR onCanInterrupt1() {
 }
 
 bool enqueueFrame(mbx_t *mbox, const struct can_frame *msg) {
+  bool queued = false;
+  xSemaphoreTake(mbox->mutex, portMAX_DELAY);
   if (mbox->count < MAILBOX_CAPACITY) {
     mbox->frames[mbox->tail] = *msg;
     mbox->tail = (mbox->tail + 1) % MAILBOX_CAPACITY;
     mbox->count++;
-    return true;
-  } else {
-    return false;
+    queued = true;
   }
+  xSemaphoreGive(mbox->mutex);
+  return queued;
 }
 
 bool dequeueFrame(mbx_t *mbox, struct can_frame *msg) {
+  bool dequeued = false;
+  xSemaphoreTake(mbox->mutex, portMAX_DELAY);
   if (mbox->count) {
     *msg = mbox->frames[mbox->head];
     mbox->head = (mbox->head + 1) % MAILBOX_CAPACITY;
     mbox->count--;
-    return true;
-  } else {
-    return false;
+    dequeued = true;
   }
+  xSemaphoreGive(mbox->mutex);
+  return dequeued;
 }
 
 void sendMsg(mbx_t *mbox, canid_t id, const void *msg, size_t len, uint8_t repeat) {
@@ -268,6 +277,7 @@ void clearCan1(unsigned long timeout_ms) {
       memset(&KOMBI_A5, 0, sizeof(KOMBI_A5));           // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
       memset(&UBF_A1, 0, sizeof(UBF_A1));               // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
       memset(&TP_KOMBI_AGW1, 0, sizeof(TP_KOMBI_AGW1)); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+      memset(&TP_AGW_KOMBI1, 0, sizeof(TP_AGW_KOMBI1)); // ECU: AGW, NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
       xSemaphoreGive(canMutex);
       last_flushed = msg_time;
     }

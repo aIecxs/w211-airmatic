@@ -102,8 +102,8 @@ In accordance with these licenses, please always provide full source code with e
    - [default.csv](https://github.com/espressif/arduino-esp32/blob/3.3.11/tools/partitions/default.csv?plain=1)
    - [bootloader_dio_40m.bin](https://github.com/espressif/arduino-esp32/raw/5b61930/tools/sdk/esp32/bin/bootloader_dio_40m.bin)
    - [boot_app0.bin](https://github.com/espressif/arduino-esp32/raw/refs/tags/3.3.11/tools/partitions/boot_app0.bin)
-   - [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin)
-   - [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin)
+   - [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.2.0/AIRmatic.ino.bin)
+   - [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.2.0/AIRmatic.littlefs.bin)
 3. Open Windows Command Prompt. `cd` into the Folder.
 4. Flash using this commands:
 
@@ -298,8 +298,8 @@ To compile and upload the firmware to your ESP32, follow these steps:
 13. **Update the firmware** (WiFi)  
     connect Computer to ESP32 WiFi (see [Wireless.ino](Wireless.ino#L28) for credentials)  
     visit http://192.168.4.1/update  
-    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.ino.bin) (or see in `%LocalAppData%/arduino/sketches/`)  
-    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.1.1/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
+    upload the [AIRmatic.ino.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.2.0/AIRmatic.ino.bin) (or see in `%LocalAppData%/arduino/sketches/`)  
+    select LittleFS, upload the [AIRmatic.littlefs.bin](https://github.com/aIecxs/w211-airmatic/releases/download/v0.2.0/AIRmatic.littlefs.bin) (or see in `%Temp%` -> `tmp*.littlefs.bin`)
 
 ---
 

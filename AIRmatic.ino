@@ -70,7 +70,8 @@
 // CAN IDs Interior CAN-B
 #define CANID2 0x01CA // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 #define CANID3 0x001A // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
-#define CANID6 0x01D0 // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+#define CANID6 0x01D0 // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0, MSG COUNT: 1
+#define CANID7 0x01A4 // ECU: AGW, NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
 
 #define CAN_DATA_EXPIRY_MS 1000
 
@@ -100,6 +101,7 @@ typedef struct {
   uint8_t tail;
   uint8_t count;
   unsigned long timestamp;
+  SemaphoreHandle_t mutex;
 } mbx_t;
 
 typedef struct {
@@ -144,7 +146,8 @@ struct MS_608h_t MS_608h;   // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
 // CAN Frames Interior CAN-B
 struct KOMBI_A5_t KOMBI_A5; // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
 struct UBF_A1_t UBF_A1;     // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
-struct TP_KOMBI_AGW1_t TP_KOMBI_AGW1; // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+struct TP_KOMBI_AGW1_t TP_KOMBI_AGW1; // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0, MSG COUNT: 1
+struct TP_AGW_KOMBI1_t TP_AGW_KOMBI1; // ECU: AGW, NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
 
 // CAN message buffer
 struct can_frame canMsg[4];
@@ -174,6 +177,20 @@ int8_t calib_hl = 0; // NHLS1 calibration
 // AIRmatic mode control buttons
 uint8_t st2_bet = 0; // DESC: ST2_BET - LF/ABC 2-position switch actuated
 uint8_t st3_bet = 0; // DESC: ST3_BET - LF/ABC 3-position switch operated
+
+struct trans_t {
+  const char* name;
+  const char* desc;
+};
+
+// AIRmatic mode translation text
+const trans_t modes[] = {
+  {"comfort", "Komfort"},
+  {"sport1", "Sport I"},
+  {"sport2", "Sport I I"},
+  {"offroad", "Schlechtwege"},
+  {"default", "Park"}
+};
 
 volatile bool jsonBusy = false;
 String configJson;
@@ -242,15 +259,15 @@ void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
     case CANID5:
       copyMsg(&MS_608h);  // ECU: MS, NAME: MS_608h, ID: 0x0608, MSG COUNT: 13
       MS_608h.VB = __builtin_bswap16(MS_608h.VB);
-/*
       MS_608h.FCOD_MOT =
         (MS_608h.FCOD_MOT0 & 0x3F) | // Vehicle code engine 7Bit, Bit0-5 (Bit6 -> Signal FCOD_MOT6)
         (MS_608h.FCOD_MOT6 << 6);    // Vehicle code engine with 7 bits, bit 6
-*/
       break;
     case CANID6:
       copyMsg(&TP_KOMBI_AGW1); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
-      TP_KOMBI_AGW1.TP_KOMBI_AGW = __builtin_bswap64(TP_KOMBI_AGW1.TP_KOMBI_AGW);
+      break;
+    case CANID7:
+      copyMsg(&TP_AGW_KOMBI1); // ECU: AGW, NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
       break;
   }
 }
@@ -283,7 +300,6 @@ class delayMicrosec {
         esp_timer_create(&args, &timer);
       }
       esp_timer_start_once(timer, adjusted);
-      taskYIELD();
       ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
 };
@@ -444,6 +460,17 @@ void limitOffset(int8_t* off) {
   *off = *off > MAX_OFF ? MAX_OFF : *off;   // max suspension height
 }
 
+// translation text helper
+const char* text(const String& name) {
+  const size_t count = sizeof(modes) / sizeof(modes[0]);
+  for (size_t i = 0; i < count; i++) {
+    if (name == modes[i].name) {
+      return modes[i].desc;
+    }
+  }
+  return name.c_str();
+}
+
 /** // display offset on ic
  * @brief Sends the custom axle-level offset to the instrument cluster
  *   `0` = `select::Rear`
@@ -496,31 +523,44 @@ void displayOffset(int axle, int action) {
     default:
       return;
   }
-  snprintf(offset, sizeof(offset), "%+dmm", (int)value);
-  level = (value < 0) ? "tief" : "hoch";
+
+  snprintf(offset, sizeof(offset), value != 0 ? "%+3dmm" : "%3dmm", (int)value);
+  if (value != 0) {
+    level = (value < 0) ? "tiefer" : "h\xF6her";
+  } else {
+    level = "";
+  }
 
   switch ((cmd)action) {
     case cmd::Reset:    // MSG NAME: BUTTON_4_2 - Telefon End, OFFSET 8, LENGTH 1
-      lines[0] = "reset";
-      lines[1] = mode.c_str();
+      char buf0[32];
+      snprintf(buf0, sizeof(buf0), "gel\xF6scht %s", chassis);
+      lines[0] = buf0;
+      lines[1] = text(mode);
       lines[2] = offset;
-      lines[3] = "";
+      lines[3] = nullptr;
       break;
     case cmd::Set:      // MSG NAME: BUTTON_4_1 - Telefon Send, OFFSET 9, LENGTH 1
-      lines[0] = "gespeichert";
-      lines[1] = mode.c_str();
+      char buf1[32];
+      snprintf(buf1, sizeof(buf1), "gespeichert %s", chassis);
+      lines[0] = buf1;
+      lines[1] = text(mode);
       lines[2] = offset;
       lines[3] = "OK";
       break;
     case cmd::Dn:       // MSG NAME: BUTTON_3_2 - Taste "-", OFFSET 10, LENGTH 1
-      lines[0] = level;
-      lines[1] = mode.c_str();
+      char buf2[32];
+      snprintf(buf2, sizeof(buf2), "%s%s", chassis, offset);
+      lines[0] = buf2;
+      lines[1] = text(mode);
       lines[2] = offset;
       lines[3] = "-";
       break;
     case cmd::Up:       // MSG NAME: BUTTON_3_1 - Taste "+", OFFSET 11, LENGTH 1
-      lines[0] = level;
-      lines[1] = mode.c_str();
+      char buf3[32];
+      snprintf(buf3, sizeof(buf3), "%s%s", chassis, offset);
+      lines[0] = buf3;
+      lines[1] = text(mode);
       lines[2] = offset;
       lines[3] = "+";
       break;
@@ -528,7 +568,7 @@ void displayOffset(int axle, int action) {
       return;
   }
   // async wrapper for ic.update(num, lines, 500)
-  for (uint8_t i = 0; i < params.bodyLineCount; ++i) {
+  for (uint8_t i = 0; i < params.bodyLineCount; i++) {
     snprintf(
       params.bodyLines[i],
       sizeof(params.bodyLines[i]),
@@ -536,18 +576,19 @@ void displayOffset(int axle, int action) {
       lines[i] != nullptr ? lines[i] : ""
     );
   }
-  snprintf(params.pageText, sizeof(params.pageText), "%s", chassis);
+  snprintf(params.pageText, sizeof(params.pageText), "%s", level != nullptr ? level : "");
   if (xQueueSend(displayQueue, &params, 0) == pdPASS) {
     xTaskNotify(displayTaskHandle, DISPLAY_NOTIFY_COMMAND, eSetBits);
   }
 }
 
-// async wrapper for ic.update(text)
+// async wrapper for ic.update(text, 1000)
 void displayInit() {
   DisplayCommand cmd{};
   const char* text = "Niveau";
+  cmd.repeat = 1000;
   cmd.type = DisplayCommandType::Page;
-  snprintf(cmd.pageText, sizeof(cmd.pageText), "%s", text);
+  snprintf(cmd.pageText, sizeof(cmd.pageText), "%s", text != nullptr ? text : "");
   displayStart = millis();
   displayEnabled = true;
   if (displayQueue == nullptr) {
@@ -600,8 +641,8 @@ void displayTask(void*) {
     );
     while (xQueueReceive(displayQueue, &cmd, 0) == pdTRUE) {
       if (cmd.type == DisplayCommandType::Page) {
-        // send initPage()
-        ic.update(cmd.pageText);
+        // replay initPage() for 60 seconds
+        ic.update(cmd.pageText, cmd.repeat);
       } else if (cmd.type == DisplayCommandType::Body) {
         const char* lines[4] = {
           cmd.bodyLines[0],
@@ -615,7 +656,10 @@ void displayTask(void*) {
     }
     if ((notifications & DISPLAY_NOTIFY_SERVICE) != 0) {
       // service scheduled replays from loop()
-      ic.update();
+      if (!ic.update()) {
+        Serial.println("Error: too much CAN traffic");
+        Serial.flush();
+      }
     }
   }
 }
@@ -874,6 +918,9 @@ void setup() {
   // debug can stats
   initCanStatsMutexes();
 
+  // can mailbox queue
+  initMailboxMutexes();
+
   Can0 = new MCP2515(CS0); // CS -> GPIO5
   Can1 = new MCP2515(CS1); // CS -> GPIO15
 
@@ -906,6 +953,7 @@ void setup() {
   Can1->setFilter(MCP2515::RXF2, false, CANID2); // ECU: KOMBI, NAME: KOMBI_A5, ID: 0x01CA, MSG COUNT: 25
   Can1->setFilter(MCP2515::RXF3, false, CANID3); // ECU: UBF, NAME: UBF_A1, ID: 0x001A, MSG COUNT: 9
   Can1->setFilter(MCP2515::RXF4, false, CANID6); // ECU: KOMBI, NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+  Can1->setFilter(MCP2515::RXF5, false, CANID7); // ECU: AGW, NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
 
   if (Can0->setNormalOneShotMode() == MCP2515::ERROR_OK) {
     Serial.println("MCP2515 initialized");
@@ -1050,6 +1098,7 @@ void loop() {
   // read offsets from table
   if (mode != lastMode) {
     lastMode = mode;
+    isInPage = false;
     // on table: apply offsets
     getSettings(mode);
     limitOffset(&offset_nv);
@@ -1160,6 +1209,7 @@ void loop() {
       ic_stat = 255;
     }
   } else if (ic_stat == 5) {
+    ic.current_page = 5;
     isInPage = true;
     displayInit();
   }

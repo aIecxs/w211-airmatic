@@ -362,7 +362,7 @@ typedef struct MS_608h_t {
 
 // extra bytes -> must set extern
 // byte 8
-//  uint8_t FCOD_MOT                : 7; // DESC: FCOD_MOT - Vehicle code engine 7Bit, (concatenated FCOD_MOT0 + FCOD_MOT6)
+  uint8_t FCOD_MOT                : 7; // DESC: FCOD_MOT - Vehicle code engine 7Bit, (concatenated FCOD_MOT0 + FCOD_MOT6)
 /*
   enum class FCOD_MOT_c : uint8_t {    // DESC: FCOD_MOT - Vehicle code engine 7Bit, (concatenated FCOD_MOT0 + FCOD_MOT6)
     M272E35                       = 0, // enum: 0 - M272 E35 / M272E35
@@ -417,7 +417,7 @@ typedef struct MS_608h_t {
     OM642DE30LARED140             = 99, // enum: 99 - OM642 DE30 LA red. (140kW) / OM642DE30LARED140
   } : 7; FCOD_MOT_c FCOD_MOT;
 */
-//  uint8_t                         : 1; // Padding, OFFSET: 64, LEN: 1
+  uint8_t                         : 1; // Padding, OFFSET: 64, LEN: 1
 } __attribute__((__packed__)) MS_608h_t;
 
 

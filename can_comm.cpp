@@ -60,6 +60,7 @@ can_frame *CANBUS_COMMUNICATOR::read_frame() {
     read.can_id = 0x1D0;
     read.can_dlc = 0x08;
     while (true) {
+        vTaskDelay(1);
         if (TP_KOMBI_AGW1.TP_KOMBI_AGW != 0xDEADBEEF00000000) {
             break;
         }
@@ -68,7 +69,6 @@ can_frame *CANBUS_COMMUNICATOR::read_frame() {
             read.can_dlc = 0x00;
             return &read;
         }
-        portYIELD();
     }
     xSemaphoreTake(canMutex, portMAX_DELAY);
     for (int i = 0; i < read.can_dlc; i++) {

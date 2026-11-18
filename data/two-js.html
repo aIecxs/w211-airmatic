@@ -30,6 +30,9 @@
       });
 
       window.addEventListener('message', function (event) {
+        if (event.data.status === 'timeout') { 
+          return;
+        }
         if (event.data?.type === 'wheel-selected') {
           createWheels(event.data.filename);
           createChassis(event.data.fcod_br);
@@ -62,7 +65,7 @@
         if (rearWheel) {
           rearWheel.remove();
         }
-        frontWheel = two.makeSprite(`./${filename}`, 165, 200);
+        frontWheel = two.makeSprite(`./${wheels}`, 165, 200);
         rearWheel = frontWheel.clone(two);
         rearWheel.translation.set(594, 200);
         two.update();

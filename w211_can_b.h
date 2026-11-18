@@ -78,10 +78,16 @@ typedef struct UBF_A1_t {
 } __attribute__((__packed__)) UBF_A1_t;
 
 
-// ECU NAME: TP_KOMBI_AGW1, ID: 0x01D0. MSG COUNT: 1
+// ECU NAME: TP_KOMBI_AGW1, ID: 0x01D0, MSG COUNT: 1
 typedef struct TP_KOMBI_AGW1_t {
   uint64_t TP_KOMBI_AGW           : 64; // MSG NAME: TP_KOMBI_AGW - Kommunikation KOMBI zum AGW, OFFSET 0, LENGTH 64
 } __attribute__((__packed__)) TP_KOMBI_AGW1_t;
+
+
+// ECU NAME: TP_AGW_KOMBI1, ID: 0x01A4, MSG COUNT: 1
+typedef struct TP_AGW_KOMBI1_t {
+  uint64_t TP_AGW_KOMBI           : 64; // MSG NAME: TP_AGW_KOMBI - Kommunikation AGW zum KOMBI, OFFSET 0, LENGTH 64
+} __attribute__((__packed__)) TP_AGW_KOMBI1_t;
 
 
 #endif /* W211_CAN_B_H */

@@ -695,8 +695,8 @@
 
   // initial loading of chassing.png from configJson
   function createChassis() {
-    const fcod_br = cachedJson?.fcod_br;
-    if (fcod_br === fzgcod) {
+    const fcod_br = cachedJson?.fcod_br ?? "W211";
+    if (fcod_br === fzgcod || !fcod_br.trim()) {
       return;
     }
     fzgcod = fcod_br;
@@ -934,7 +934,7 @@
   }
 
   function fetchJson() {
-    fetch("/config.json")
+    return fetch("/config.json")
       .then(response => response.json())
       .then(data => {
         cachedJson = data;
@@ -1011,10 +1011,12 @@
     }
   }
 
-  fetchJson();
-  createWheels();
-  createChassis();
-  initSliders();
+  fetchJson()
+    .then(() => {
+      createChassis();
+      createWheels();
+      initSliders();
+    });
   setInterval(fetchJson, 2000);
 </script>
 

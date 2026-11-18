@@ -79,6 +79,21 @@
         overflow-x: auto;
         margin-top: 1rem;
       }
+      .links {
+        position: fixed;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-block;
+        margin: 0;
+        background: #f4f4f4;
+        padding: 0 10px;
+        border-radius: 10px;
+        text-align: center;
+      }
+      .links p {
+        margin: 4px 0;
+      }
     </style>
   </head>
 
@@ -106,6 +121,9 @@
       <button class="submit-btn" onclick="submitForm()" disabled>OK</button>
     </div>
     <pre id="out"></pre>
+    <div class="links">
+      <p><span>CAN Bus Statistics</span><br><a href="/stats" class="dynamic-link" target="_blank">http://192.168.4.1/stats</a></p>
+    </div> 
 
     <script>
       const whitelist = /^[\ !#$%&+,\-./0-9=?@A-Z_\\a-z~]+$/;
@@ -566,6 +584,19 @@
       function return2home() {
         window.location.href = "/";
       }
+
+      function setHostname() {
+        const host = window.location.hostname;
+        const links = document.querySelectorAll('.dynamic-link');
+        links.forEach(link => {
+          link.textContent = link.textContent.replace(
+            /192\.168\.4\.1/g,
+            `${host}`
+          );
+        });
+      }
+
+      setHostname();
 
       // run once at start
       window.addEventListener("load", initPage);
