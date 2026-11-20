@@ -70,7 +70,6 @@ bool IC_DISPLAY::setBody(uint8_t p, const char* text, uint8_t fmt = IC_TEXT_FMT_
     if (!sendBytes(400,0)) {
         return false;
     }
-    replayBodyLastAt = millis();
     if (fc.body.isFlag && fc.body.page == p) {
         fc.body.isFlag = false;
         if (millis() - fc.body.timestamp < 0 + FC_TIMEOUT_MS) {
@@ -115,7 +114,6 @@ bool IC_DISPLAY::setBodyTel(uint8_t numStrs, const char* lines[]){
     if (!sendBytes(400,0)) {
         return false;
     }
-    replayBodyLastAt = millis();
     if (fc.body.isFlag && fc.body.page == IC_PAGE_TELEPHONE) {
         fc.body.isFlag = false;
         if (millis() - fc.body.timestamp < 0 + FC_TIMEOUT_MS) {
@@ -126,7 +124,12 @@ bool IC_DISPLAY::setBodyTel(uint8_t numStrs, const char* lines[]){
 }
 
 void IC_DISPLAY::processIcResponse(can_frame *r) {
-    if (r->can_id == 0x1D0) {
+    static unsigned long estimated = millis();
+    if (estimated < millis()) {
+        estimated = millis();
+        fc.busy = false;
+    }
+    if (r->can_id == RECEIVE_CAN_ID) {
         DPRINTLN(IC_TO_AGW_STR+*canB->frame_to_string(r, false));
         // Parse Flow Control Frames
         if ((r->data[0] & 0xF0) == 0x30) {
@@ -178,6 +181,17 @@ void IC_DISPLAY::processIcResponse(can_frame *r) {
             }
             return;
         }
+    } else if (r->can_id == SEND_CAN_ID) {
+        DPRINTLN(AGW_TO_IC_STR+*canB->frame_to_string(r, false));
+        // Parse ISO-TP First Frame (FF)
+        if ((r->data[0] & 0xF0) == 0x10) {
+            uint16_t len = ((r->data[0] & 0x0F) << 8) | r->data[1];
+            uint16_t remaining = (len > 6) ? (len - 6) : 0;
+            uint16_t count = (remaining + 6) / 7;
+            estimated += (unsigned long)count * (fc.stMin < 0xF0 ? fc.stMin : POLL_STEP_MS);
+		}
+        fc.busy = true;
+        return;
     }
 }
 
@@ -212,7 +226,6 @@ bool IC_DISPLAY::initPage(uint8_t p, const char* header, uint8_t fmt, uint8_t up
     if (!sendBytes(400,400)) {
         return false;
     }
-    replayPageLastAt = millis();
     if (fc.initPage.isFlag && fc.initPage.page == p) {
         fc.initPage.isFlag = false;
         if (millis() - fc.initPage.timestamp < 400 + FC_TIMEOUT_MS) {
@@ -244,10 +257,18 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
             wait(40); // fallback
         }
     };
-    // Step 1: wait for any ACK Frame
+    // Step 0: wait for silence on SEND_CAN_ID
     unsigned long preStart = millis();
+    while (fc.busy && millis() - preStart < (unsigned long)pre_delay + POLL_STEP_MS) {
+        wait(POLL_STEP_MS);
+    }
+    // Step 1: wait for any ACK Frame
     while (!receivedACK() && millis() - preStart < (unsigned long)pre_delay + POLL_STEP_MS) {
         wait(POLL_STEP_MS);
+    }
+    if (fc.busy) {
+        DPRINTLN(F("ACK timeout!"));
+        return false;
     }
     if (buffer_size < 8) {
         // Step 2: send Single Frame (SF)
@@ -285,7 +306,7 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
             for (int offset = 6; offset < buffer_size; offset += 7) {
 //                st_min(); // wait(40);
                 wait(2); // speed up faster than allowed
-                if (fc.timestamp != lastFc) {
+                if (fc.busy || fc.timestamp != lastFc) {
                     // another AGW >> IC transfer detected, abort
                     return false;
                 }
@@ -312,12 +333,16 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
                         DPRINTLN(F("FC timeout!"));
                         return false;
                     }
-                    lastFc = fc.timestamp;
-                    frameCount = fc.bs;
-                    framesSent = 0;
+                    if (fc.state == 0x30) {
+                        lastFc = fc.timestamp;
+                        frameCount = fc.bs;
+                        framesSent = 0;
+                    }
                 }
             }
             wait(post_delay + FC_TIMEOUT_MS); // poll for ACK
+        } else {
+            return false;
         }
     }
     return true;
@@ -326,11 +351,7 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
 
 void IC_DISPLAY::wait(unsigned long msec) {
     unsigned long endTime = millis() + msec;
-    if (TP_KOMBI_AGW1.TP_KOMBI_AGW != 0xDEADBEEF00000000) {
-        xSemaphoreTake(canMutex, portMAX_DELAY);
-        TP_KOMBI_AGW1.TP_KOMBI_AGW = 0xDEADBEEF00000000;
-        xSemaphoreGive(canMutex);
-    }
+    canB->clear_frame();
     while (millis() <= endTime) {
         processIcResponse(canB->read_frame());
     }
@@ -361,7 +382,7 @@ bool IC_DISPLAY::update() {
     if (replayPageEnabled) {
         if (now - replayPageStartedAt > PAGE_REPLAY_LIFETIME_MS) {
             replayPageEnabled = false;
-        } else if (now - replayPageLastAt > replayPageRepeat) {
+        } else if (int(now - replayPageLastAt) > (int)replayPageRepeat + adHocRetryPage) {
             if (!initPage(
                 IC_PAGE_TELEPHONE,
                 pendingPageText,
@@ -375,21 +396,17 @@ bool IC_DISPLAY::update() {
                 pendingPageText,
                 IC_TEXT_FMT_CENTER_JUSTIFICATION
             )) ret &= ~0x02;
-            if ((ret & 0x03) == 0x03) {
+            if (ret & 0x01) {
                 replayPageEnabled = false;
             }
             replayPageLastAt = now;
             replayBodyLastAt = now;
+            adHocRetryPage = 0;
+            adHocRetryBody = 0;
         }
     }
-    if (replayBodyEnabled && now - replayBodyLastAt > replayBodyRepeat) {
+    if (replayBodyEnabled && int(now - replayBodyLastAt) > (int)replayBodyRepeat + adHocRetryBody) {
         if (now - replayBodyStartedAt < BODY_REPLAY_LIFETIME_MS) {
-            if (!setHeader(
-                    IC_PAGE_TELEPHONE,
-                    replayPageText,
-                    IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
-                ret &= ~0x04;
-            }
             const char* lines[MAX_BODY_LINES] = {
                 replayBody[0],
                 replayBody[1],
@@ -399,13 +416,13 @@ bool IC_DISPLAY::update() {
             if (!setBodyTel(replayBodyLineCount, lines)) {
                 ret &= ~0x08;
             }
-        } else {
             if (!setHeader(
                     IC_PAGE_TELEPHONE,
-                    pendingPageText,
+                    replayPageText,
                     IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
-                ret &= ~0x10;
+                ret &= ~0x04;
             }
+        } else {
             const char* lines[MAX_BODY_LINES] = {
                 "AIRmatic",
                 replayBody[1],
@@ -415,13 +432,27 @@ bool IC_DISPLAY::update() {
             if (!setBodyTel(replayBodyLineCount, lines)) {
                 ret &= ~0x20;
             }
-            if ((ret & 0x30) == 0x30) {
+            if (!setHeader(
+                    IC_PAGE_TELEPHONE,
+                    pendingPageText,
+                    IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
+                ret &= ~0x10;
+            }
+            if ((ret & 0x28) == 0x28) {
                 replayBodyEnabled = false;
             } else {
                 replayBodyStartedAt += replayBodyRepeat;
             }
         }
         replayBodyLastAt = now;
+        adHocRetryBody = 0;
+    }
+    // retry on fail: fire up again immediately
+    if (!(ret & 0x01)) {
+        adHocRetryPage = RETRY_ON_FAIL_INTERVAL_MS - (int)replayPageRepeat;
+    }
+    else if ((ret & 0x28) != 0x28) {
+        adHocRetryBody = RETRY_ON_FAIL_INTERVAL_MS - (int)replayBodyRepeat;
     }
     return (ret == 0x3F);
 }

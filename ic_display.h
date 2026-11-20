@@ -138,11 +138,13 @@ class IC_DISPLAY {
         static constexpr unsigned long BODY_REPLAY_LIFETIME_MS = 10000;
         static constexpr uint8_t MAX_BODY_LINES = 4;
         static constexpr size_t REPLAY_LINE_SIZE = 32;
+        static constexpr int RETRY_ON_FAIL_INTERVAL_MS = 50;
 
         // Page replay state
         char pendingPageText[32] = {};
         char replayPageText[32] = {};
         bool replayPageEnabled = false;
+        int adHocRetryPage = 0;
         unsigned long replayPageRepeat = 0;
         unsigned long replayPageLastAt = 0;
         unsigned long replayPageStartedAt = 0;
@@ -151,6 +153,7 @@ class IC_DISPLAY {
         char replayBody[MAX_BODY_LINES][REPLAY_LINE_SIZE] = {};
         uint8_t replayBodyLineCount = 0;
         bool replayBodyEnabled = false;
+        int adHocRetryBody = 0;
         unsigned long replayBodyRepeat = 0;
         unsigned long replayBodyLastAt = 0;
         unsigned long replayBodyStartedAt = 0;
@@ -177,8 +180,9 @@ class IC_DISPLAY {
             ack_t other;
             uint8_t state = 0;      // CTS / WAIT / OVFLW
             uint8_t bs = 0;         // consecutive frames count
-            uint8_t stMin = 0;      // STmin minimum delay between CFs
+            uint8_t stMin = 40;     // STmin minimum delay between CFs
             unsigned long timestamp = 0; // last seen
+            bool busy = false;
         };
 
         /** Used to store ack timestamps */

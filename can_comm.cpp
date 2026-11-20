@@ -56,26 +56,70 @@ void CANBUS_COMMUNICATOR::sendToBus(can_frame *send) {
 }
 
 can_frame *CANBUS_COMMUNICATOR::read_frame() {
+    // Setup default Error frame
+    read.can_id = 0x00;
+    read.can_dlc = 0x00;
+
+    // Try and read a frame from Bus. If frame cannot be read, then the read frame
+    // Retains its data
+//    mcp->readMessage(&read);
+
+    // poll CAN data from the external buffer using a sentinel
+    readMessage(&read);
+
+    return &read;
+}
+
+void CANBUS_COMMUNICATOR::clear_frame() {
+    if (TP_KOMBI_AGW1.TP_KOMBI_AGW != sentinel ||
+        TP_AGW_KOMBI1.TP_AGW_KOMBI != sentinel) {
+        xSemaphoreTake(canMutex, portMAX_DELAY);
+        if (TP_KOMBI_AGW1.TP_KOMBI_AGW != sentinel) {
+            TP_KOMBI_AGW1.TP_KOMBI_AGW = sentinel;
+        }
+        if (TP_AGW_KOMBI1.TP_AGW_KOMBI != sentinel) {
+            TP_AGW_KOMBI1.TP_AGW_KOMBI = sentinel;
+        }
+        xSemaphoreGive(canMutex);
+    }
+}
+
+void CANBUS_COMMUNICATOR::readMessage(can_frame* frame) {
     unsigned long timeout = millis();
-    read.can_id = 0x1D0;
-    read.can_dlc = 0x08;
     while (true) {
         vTaskDelay(1);
-        if (TP_KOMBI_AGW1.TP_KOMBI_AGW != 0xDEADBEEF00000000) {
+        if (TP_KOMBI_AGW1.TP_KOMBI_AGW != sentinel) {
+            frame->can_id = RECEIVE_CAN_ID;
+            frame->can_dlc = 0x08;
+            break;
+        }
+        if (TP_AGW_KOMBI1.TP_AGW_KOMBI != sentinel) {
+            frame->can_id = SEND_CAN_ID;
+            frame->can_dlc = 0x08;
             break;
         }
         if (millis() - timeout > 0) {
-            read.can_id = 0x00;
-            read.can_dlc = 0x00;
-            return &read;
+            frame->can_id = 0x00;
+            frame->can_dlc = 0x00;
+            return;
         }
     }
     xSemaphoreTake(canMutex, portMAX_DELAY);
-    for (int i = 0; i < read.can_dlc; i++) {
-        read.data[i] = (uint8_t)((TP_KOMBI_AGW1.TP_KOMBI_AGW >> (i * 8)) & 0xFF);
+    uint64_t buf = 0;
+    switch (frame->can_id) {
+    case RECEIVE_CAN_ID:
+        buf = TP_KOMBI_AGW1.TP_KOMBI_AGW;
+        TP_KOMBI_AGW1.TP_KOMBI_AGW = sentinel;
+        break;
+    case SEND_CAN_ID:
+        buf = TP_AGW_KOMBI1.TP_AGW_KOMBI;
+        TP_AGW_KOMBI1.TP_AGW_KOMBI = sentinel;
+        break;
     }
     xSemaphoreGive(canMutex);
-    return &read;
+    for (int i = 0; i < frame->can_dlc; ++i) {
+        frame->data[i] = (uint8_t)((buf >> (i * 8)) & 0xFF);
+    }
 }
 
 char idBuffer[7];

@@ -7,6 +7,7 @@
 
 extern SemaphoreHandle_t canMutex;
 extern TP_KOMBI_AGW1_t TP_KOMBI_AGW1;
+extern TP_AGW_KOMBI1_t TP_AGW_KOMBI1;
 
 //#define DEBUG
 #ifdef DEBUG
@@ -16,6 +17,12 @@ extern TP_KOMBI_AGW1_t TP_KOMBI_AGW1;
   #define DPRINT(...)
   #define DPRINTLN(...)
 #endif
+
+// CAN ID of AGW that communicates to the IC Display
+#define SEND_CAN_ID 0x1A4
+
+// CAN ID of IC Display back to AGW
+#define RECEIVE_CAN_ID 0x1D0
 
 #define CAN_C_DEF 'C'
 #define CAN_B_DEF 'B'
@@ -69,10 +76,23 @@ class CANBUS_COMMUNICATOR {
          */
         void sendSerialFrame();
 
+        /** writes a sentinel into project specific mailbox buffers */
+        void clear_frame();
+
     private:
         String frame_string;
         can_frame read;
+
+       /**
+         * readMessage() adapts the API to read frame data from the project's buffer
+         * instead of accessing MCP2515 directly, since MCP2515 is handled elsewhere
+         */
+        void readMessage(can_frame* frame);
 //        MCP2515 *mcp;
+
+        /** used to clear readMessage() stale can data */
+        static constexpr uint64_t sentinel = 0xDEADBEEF00000000;
+
         char busID;
 };
     
