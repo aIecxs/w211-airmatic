@@ -528,7 +528,7 @@ void displayOffset(int axle, int action) {
   if (value != 0) {
     level = (value < 0) ? "tiefer" : "h\xF6her";
   } else {
-    level = "";
+    level = "      ";
   }
 
   switch ((cmd)action) {

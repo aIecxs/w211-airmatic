@@ -305,7 +305,7 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
             uint8_t seqId = 1;
             for (int offset = 6; offset < buffer_size; offset += 7) {
 //                st_min(); // wait(40);
-                wait(2); // speed up faster than allowed
+                wait(5); // speed up faster than allowed
                 if (fc.busy || fc.timestamp != lastFc) {
                     // another AGW >> IC transfer detected, abort
                     return false;

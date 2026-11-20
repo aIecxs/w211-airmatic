@@ -159,7 +159,7 @@ class IC_DISPLAY {
         unsigned long replayBodyStartedAt = 0;
 
         // ack and flow control timeout
-        static constexpr unsigned long FC_TIMEOUT_MS = 20;
+        static constexpr unsigned long FC_TIMEOUT_MS = 30;
 
         // step size for polling
         static constexpr unsigned long POLL_STEP_MS = 2;
