@@ -189,7 +189,9 @@ void IC_DISPLAY::processIcResponse(can_frame *r) {
             uint16_t remaining = (len > 6) ? (len - 6) : 0;
             uint16_t count = (remaining + 6) / 7;
             estimated += (unsigned long)count * (fc.stMin < 0xF0 ? fc.stMin : POLL_STEP_MS);
-		}
+        } else if (!fc.busy) {
+            estimated += 5UL;
+        }
         fc.busy = true;
         return;
     }
@@ -266,8 +268,8 @@ bool IC_DISPLAY::sendBytes(int pre_delay, int post_delay) {
     while (!receivedACK() && millis() - preStart < (unsigned long)pre_delay + POLL_STEP_MS) {
         wait(POLL_STEP_MS);
     }
+    wait(5); // don't kick in immediately
     if (fc.busy) {
-        DPRINTLN(F("ACK timeout!"));
         return false;
     }
     if (buffer_size < 8) {
@@ -367,7 +369,6 @@ bool IC_DISPLAY::receivedACK() {
             || (fc.initPage.isFlag && now - fc.initPage.timestamp < FC_TIMEOUT_MS)
             || (fc.body.isFlag     && now - fc.body.timestamp     < FC_TIMEOUT_MS)
             || (fc.header.isFlag   && now - fc.header.timestamp   < FC_TIMEOUT_MS);
-
     fc.other.isFlag    = false;
     fc.initPage.isFlag = false;
     fc.body.isFlag     = false;
@@ -391,16 +392,19 @@ bool IC_DISPLAY::update() {
                 IC_SYMB_NONE,
                 replayBodyLineCount
             )) ret &= ~0x01;
-            if (!setHeader(
-                IC_PAGE_TELEPHONE,
-                pendingPageText,
-                IC_TEXT_FMT_CENTER_JUSTIFICATION
-            )) ret &= ~0x02;
             if (ret & 0x01) {
+                if (!setHeader(
+                    IC_PAGE_TELEPHONE,
+                    pendingPageText,
+                    IC_TEXT_FMT_CENTER_JUSTIFICATION
+                )) ret &= ~0x02;
+            }
+            if ((ret & 0x03) == 0x03) {
                 replayPageEnabled = false;
             }
             replayPageLastAt = now;
             replayBodyLastAt = now;
+            replayBodyStartedAt = now;
             adHocRetryPage = 0;
             adHocRetryBody = 0;
         }
@@ -416,13 +420,18 @@ bool IC_DISPLAY::update() {
             if (!setBodyTel(replayBodyLineCount, lines)) {
                 ret &= ~0x08;
             }
-            if (!setHeader(
-                    IC_PAGE_TELEPHONE,
-                    replayPageText,
-                    IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
-                ret &= ~0x04;
+            if (ret & 0x08) {
+                if (!setHeader(
+                        IC_PAGE_TELEPHONE,
+                        replayPageText,
+                        IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
+                    ret &= ~0x04;
+                }
             }
         } else {
+            isExpired = true;
+        }
+        if (isExpired) {
             const char* lines[MAX_BODY_LINES] = {
                 "AIRmatic",
                 replayBody[1],
@@ -432,26 +441,26 @@ bool IC_DISPLAY::update() {
             if (!setBodyTel(replayBodyLineCount, lines)) {
                 ret &= ~0x20;
             }
-            if (!setHeader(
-                    IC_PAGE_TELEPHONE,
-                    pendingPageText,
-                    IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
-                ret &= ~0x10;
+            if (ret & 0x20) {
+                if (!setHeader(
+                        IC_PAGE_TELEPHONE,
+                        pendingPageText,
+                        IC_TEXT_FMT_CENTER_JUSTIFICATION)) {
+                    ret &= ~0x10;
+                }
             }
-            if ((ret & 0x28) == 0x28) {
+            if ((ret & 0x30) == 0x30) {
                 replayBodyEnabled = false;
-            } else {
-                replayBodyStartedAt += replayBodyRepeat;
             }
         }
         replayBodyLastAt = now;
         adHocRetryBody = 0;
     }
     // retry on fail: fire up again immediately
-    if (!(ret & 0x01)) {
+    if ((ret & 0x03) != 0x03) {
         adHocRetryPage = RETRY_ON_FAIL_INTERVAL_MS - (int)replayPageRepeat;
     }
-    else if ((ret & 0x28) != 0x28) {
+    else if ((ret & 0x3C) != 0x3C) {
         adHocRetryBody = RETRY_ON_FAIL_INTERVAL_MS - (int)replayBodyRepeat;
     }
     return (ret == 0x3F);
@@ -488,4 +497,5 @@ void IC_DISPLAY::update(const char* pageText, uint8_t bodyLineCount, const char*
     replayBodyRepeat = repeat;
     replayBodyEnabled = true;
     replayBodyStartedAt = millis();
+    isExpired = false;
 }

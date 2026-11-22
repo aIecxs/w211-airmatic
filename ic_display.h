@@ -153,13 +153,14 @@ class IC_DISPLAY {
         char replayBody[MAX_BODY_LINES][REPLAY_LINE_SIZE] = {};
         uint8_t replayBodyLineCount = 0;
         bool replayBodyEnabled = false;
+        bool isExpired = false;
         int adHocRetryBody = 0;
         unsigned long replayBodyRepeat = 0;
         unsigned long replayBodyLastAt = 0;
         unsigned long replayBodyStartedAt = 0;
 
         // ack and flow control timeout
-        static constexpr unsigned long FC_TIMEOUT_MS = 30;
+        static constexpr unsigned long FC_TIMEOUT_MS = 20;
 
         // step size for polling
         static constexpr unsigned long POLL_STEP_MS = 2;
