@@ -1,319 +1,370 @@
+#!/usr/bin/env python3
+
 #
 # Converts the can_data.txt files into C++ headers for this project!
 #
-# This program takes 2 arguments:
-# 1. Input can_data.txt file
-# 2. Output directory for header files
-# 3. Optional - Global #ifdef guard for file
 
+"""
+can_data.txt -> github.com/rnd-ash/mb-w211-pc/blob/d442caf/can_spec_canb.txt
+
+Usage: convert.py <can_data.txt>
+
+Layout rules:
+  * Byte order Little Endian
+  * MSB first
+  * gaps are filled with padding
+  * signals spanning several whole bytes stay one field (needs byteswap)
+  * signals crossing byte boundaries unaligned are split per byte
+    (NAME_p0 = least significant part) and re-assembled in an "extra" field
+
+Files created:
+  * can_data.h
+  * main.cpp
+"""
 import os
+import re
+import struct
 import sys
+from dataclasses import dataclass, field
 
 
-input_file=open(sys.argv[1], 'r')
-output_dir=sys.argv[2]
+@dataclass
+class Sig:
+    name: str
+    desc: str
+    offset: int
+    length: int
+    dtype: str = "RAW"
+    mult: float = 1.0
+    off: float = 0.0
+    enums: list = field(default_factory=list)  # (name, raw, desc)
 
-output_guard = False
-global_guard=""
-if len(sys.argv) > 3:
-    global_guard=sys.argv[3]
-    output_guard = True
 
-def clear_bit(mask, bit):
-    return mask & ~(1<<bit)
-
-def remove_useless_from_line(l: str) -> str:
-    return l.replace("\t", "").replace("\n", "")
-
-class EnumEntry:
-    def __init__(self, name: str, raw: int, desc: str):
-        self.name = name
-        self.raw = raw
-        self.desc = desc
-
-class Signal:
-    def __init__(self, name: str, desc: str, length: int, offset: int, unit: str):
-        self.name = name
-        self.desc = desc
-        self.length = length
-        self.offset = offset
-        self.is_iso_tp = False
-        self.is_number = False
-        self.is_bool = False
-        self.is_char = False
-        self.number_data = (0.0, 0.0) # Multiplier, offset
-        self.is_enum = True
-        self.unit = unit
-        self.enum_table = []
-
-    def get_return_data_type(self, frame_name: str) -> str:
-        if self.is_number:
-            if self.length <= 8: # 8 bit wide data
-                return "uint8_t"
-            elif self.length <= 16: # 16 bit wide data
-                return "uint16_t"
-            elif self.length <= 32: # 32 bit wide data
-                return "uint32_t"
-            else:
-                return "uint64_t" # 64 bit wide data
-        elif self.is_bool: # Boolean data type
-            return "bool"
-        elif self.is_enum: # Enum data type
-            return "{}_{}{}".format(frame_name, self.name, global_guard)
-        elif self.is_char:
-            return "char"
-        else:
-            return"" # ??
-
-    def get_setter_and_getter(self, frame_name: str) -> str:
-        mask = 0xFFFFFFFFFFFFFFFF
-
-        start_mask = 63-self.offset
-        for bit in range(0,self.length):
-            mask = clear_bit(mask, start_mask-bit)
-
-        f_mask = 0x0
-        for bit in range(0,self.length):
-            f_mask = (f_mask | 0x01 << bit)
-
-        conv_to = ""
-        conv_from=""
-        unit_str=""
-        if self.unit:
-            unit_str=" (Unit: {})".format(self.unit)
-        if self.is_number:
-
-            conv_to = ". Conversion formula (To raw from real): y=(x{1:+})/{0:.2f}".format(self.number_data[0], self.number_data[1]*-1)
-            conv_from = ". Conversion formula (To real from raw): y=({0:.2f}x){1:+}".format(self.number_data[0], self.number_data[1])
-
-        return """
-    /** Sets {0}{6}{8} */
-    void set_{1}({2} value){{ raw = (raw & 0x{5:{fill}16x}) | ((uint64_t)value & 0x{4:x}) << {3}; }}
-
-    /** Gets {0}{7}{8} */
-    {2} get_{1}() const {{ return ({2})(raw >> {3} & 0x{4:x}); }}
-        """.format(self.desc, self.name, self.get_return_data_type(frame_name), 64-self.length-self.offset, f_mask, mask, conv_to, conv_from, unit_str, fill='0')
-
-    def add_enum(self, e: EnumEntry):
-        self.enum_table.append(e)
-
-    def add_data_str(self, dt: str):
-        self.is_bool = False
-        self.is_enum = False
-        self.is_iso_tp = False
-        self.is_number = False
-
-        if dt.strip() == "ISO_TP":
-            self.is_iso_tp = True
-        elif dt.strip() == "CHAR":
-            self.is_char = True
-        elif dt.strip() == "BOOL":
-            self.is_bool = True
-        elif "ENUM" in dt:
-            self.is_enum = True
-        elif "NUMBER" in dt:
-            self.is_number = True
-            multiplier = float(dt.split("_MULTIPLIER_: ")[1].split(",")[0])
-            offset = float(dt.split("_OFFSET_: ")[1].split(")")[0])
-            self.number_data = (multiplier, offset)
-        else:
-            print(dt)
-
+@dataclass
 class Frame:
-    def __init__(self, name: str, id: int):
-        self.name = name
-        self.can_id = id
-        self.signals=[]
-    
-    def add_signal(self, s: Signal):
-        self.signals.append(s)
-
-class ECU:
-    def __init__(self, name: str):
-        self.name = name
-        self.frames=[]
-
-    def add_frame(self, f: Frame):
-        self.frames.append(f)
-
-    def filter_frames(self):
-        cloned = self.frames.copy()
-        self.frames.clear()
-        for x in cloned:
-            if len(x.signals) > 1:
-                self.frames.append(x)
-
-    def make_output_str(self) -> str:
-        self.filter_frames()
-        # Create output header string
-        tmp = """
-/**
-* AUTOGENERATED BY convert.py
-* DO NOT EDIT THIS FILE!
-*
-* IF MODIFICATIONS NEED TO BE MADE, MODIFY can_data.txt!
-*
-* CAN Defintiion for ECU '{0}'
-*/
-
-#ifndef __ECU_{0}_H_
-#define __ECU_{0}_H_
-
-#include <stdint.h>
-    """.format(self.name)
-
-        for f in self.frames:
-            tmp += "\n#define {}{}_CAN_ID 0x{:04X}".format(f.name.strip().removesuffix("h"), global_guard, f.can_id)
-
-        tmp += "\n\n"
-        # Now iterate over all enums of the ECU
-        for x in self.frames:
-            for s in x.signals:
-                if s.is_enum:
-                    tmp += "/** {} */".format(s.desc)
-                    tmp += "\nenum class {}_{}{} {{".format(x.name, s.name, global_guard)
-                    for e in s.enum_table:
-                        tmp += "\n\t{} = {}, // {}".format(e.name, e.raw, e.desc)
-                    tmp += "\n};\n\n"
-
-        # Now create our type unions for CAN Frames!
-        for x in self.frames:
-            struct_name = x.name.strip().removesuffix("h")
-            tmp += "\n\ntypedef union {" # Struct name
-            tmp += "\n\tuint64_t raw;" # Store raw value
-            tmp += "\n\tuint8_t bytes[8];"
-            tmp += "\n\n\t/** Gets CAN ID of {}{} */".format(struct_name, global_guard)
-            tmp += "\n\tuint32_t get_canid(){{ return {}{}_CAN_ID; }}".format(struct_name, global_guard)
-            
-            # Setters and getters!
-            for s in x.signals:
-                tmp += s.get_setter_and_getter(x.name)
-            
-            tmp += "\n}} {}{};\n\n".format(struct_name, global_guard)
+    name: str
+    can_id: int
+    sigs: list = field(default_factory=list)
+    group: str = "CAN Frames"
 
 
-        # Now magic to create the class ;)
-
-        num_frames = len(self.frames)
-
-        tmp += "\n\nclass ECU_{} {{".format(self.name)
-        tmp += "\n\tpublic:"
-        # Setter function to import supported frames to the ECU
-        tmp += """
-        /**
-         * @brief Imports the CAN frame given the CAN ID, CAN Contents, and current timestamp
-         *
-         * Returns true if the frame was imported successfully, and false if import failed (Due to non-matching CAN ID).
-         *
-         * NOTE: The endianness of the value cannot be guaranteed. It is up to the caller to correct the byte order!
-         */
-        bool import_frames(uint64_t value, uint32_t can_id, uint64_t timestamp_now) {
-            switch(can_id) {"""
-        for idx, frame in enumerate(self.frames):
-            tmp += """
-                case {0}{2}_CAN_ID:
-                    LAST_FRAME_TIMES[{1}] = timestamp_now;
-                    FRAME_DATA[{1}] = value;
-                    return true;""".format(frame.name.strip().removesuffix("h"), idx, global_guard)
-        tmp += """
-                default:
-                    return false;
-            }
-        }
-        """
-        # Now do getters!
-        for idx, frame in enumerate(self.frames):
-            tmp += """
-        /** Sets data in pointer to {0}
-          * 
-          * If this function returns false, then the CAN Frame is invalid or has not been seen
-          * on the CANBUS network yet. Meaning it's data cannot be used.
-          *
-          * If the function returns true, then the pointer to 'dest' has been updated with the new CAN data
-          */
-        bool get_{0}(uint64_t now, uint64_t max_expire_time, {0}{2}* dest) const {{
-            if (LAST_FRAME_TIMES[{1}] == 0 || dest == nullptr) {{ // CAN Frame has not been seen on bus yet / NULL pointer
-                return false;
-            }} else if (now > LAST_FRAME_TIMES[{1}] && now - LAST_FRAME_TIMES[{1}] > max_expire_time) {{ // CAN Frame has not refreshed in valid interval
-                return false;
-            }} else {{ // CAN Frame is valid! return it
-                dest->raw = FRAME_DATA[{1}];
-                return true;
-            }}
-        }}
-            """.format(frame.name.strip().removesuffix("h"), idx, global_guard)
-        tmp += "\n\tprivate:"
-        tmp += "\n\t\tuint64_t FRAME_DATA[{0}];".format(num_frames)
-        tmp += "\n\t\tuint64_t LAST_FRAME_TIMES[{0}];".format(num_frames)
-        tmp += "\n};"
-
-        # Lastly append endif guard
-        tmp += "\n#endif // __ECU_{}_H_".format(self.name)
-        return tmp
+@dataclass
+class Item:
+    start: int
+    bits: int
+    name: object      # None = padding
+    sig: object
+    comment: str
 
 
-current_ecu: ECU = None
-current_frame: Frame = None
-current_signal: Signal = None
+SIG_RE = re.compile(r"SIGNAL (\S+?),\s*OFFSET: (\d+), LEN: (\d+), DESC: (.*?)(?:, DATA TYPE (.*))?$")
+ENUM_RE = re.compile(r"ENUM (.+?),\s*RAW: (-?\d+), DESC: (.*)$")
+FRAME_RE = re.compile(r"FRAME (\S+)\s*\((\w+)\)")
 
 
-for line in input_file:
-    print(line)
-    l = remove_useless_from_line(line)
-    if not l.startswith("#"): # Ignore comments
+def f32_short(x):
+    """The txt holds float32 values widened to double (0.10000000149011612);
+    return the shortest decimal that still maps to the same float32 (0.1)."""
+    f = struct.unpack("f", struct.pack("f", x))[0]
+    for n in range(1, 10):
+        y = float(f"{f:.{n}g}")
+        if struct.unpack("f", struct.pack("f", y))[0] == f:
+            return y
+    return x
+
+
+def parse(path):
+    ecus = {}
+    frames = frame = sig = None
+    group = "CAN Frames"
+    for line in open(path, encoding="utf-8"):
+        l = line.strip()
+        g = re.match(r"#\s*GROUP\s+(.+)", l)
+        if g:  # optional marker: "# GROUP Motor CAN-C" starts a new group
+            group = g[1].strip()
+        if not l or l.startswith("#"):
+            continue
         if l.startswith("ECU "):
-            ecu = l.split("ECU ")[1].strip()
-            if getattr(current_ecu, 'name', 'nan') != ecu and current_ecu != None:
-                # Check if frame / signal is none
-                if current_signal and current_frame:
-                    if len(current_frame.signals) > 1: # Ignore ISO-TP endpoints
-                        current_frame.add_signal(current_signal)
-                    current_signal = None
-                if current_frame and current_ecu:
-                    current_ecu.add_frame(current_frame)
-                    current_frame = None
-                open("{}/{}.h".format(output_dir, current_ecu.name), 'w').write(current_ecu.make_output_str()) # Write tmp output str to file
-            current_ecu = ECU(ecu)
-        elif l.startswith("FRAME"):
-            frame_name = l.split("FRAME ")[1].split("(")[0].strip()
-            frame_id = int(l.split("(")[1].split(")")[0], 0)
-            if current_signal and current_frame:
-                current_frame.add_signal(current_signal)
-            if current_frame:
-                if len(current_frame.signals) > 1: # Ignore ISO-TP endpoints
-                    # Its a new frame
-                    current_ecu.add_frame(current_frame)
-            current_frame = Frame(frame_name, frame_id)
-            current_signal = None
-        elif l.startswith("SIGNAL"):
-            if current_signal:
-                current_frame.add_signal(current_signal)
-            signal_name = l.split("SIGNAL ")[1].split(", ")[0].strip()
-            signal_offset = int(l.split("OFFSET: ")[1].split(",")[0], 10)
-            signal_length = int(l.split("LEN: ")[1].split(",")[0], 10)
-            signal_desc = l.split("DESC: ")[1].split(", DATA TYPE")[0].strip()
-            try:
-                signal_dt = l.split(", DATA TYPE ")[1]
-            except Exception as e:
-                signal_dt = "RAW"
-            unit=""
-            if "UNIT: " in l:
-                unit = l.split("UNIT: ")[1]
-            current_signal = Signal(signal_name, signal_desc, signal_length, signal_offset, unit)
-            current_signal.add_data_str(signal_dt)
-        elif l.startswith("ENUM"):
-            if current_signal:
-                enum_name = l.split("ENUM ")[1].split(", ")[0].strip()
-                enum_raw = int(l.split("RAW: ")[1].split(", ")[0])
-                enum_desc = l.split("DESC: ")[1].strip()
-                current_signal.add_enum(EnumEntry(enum_name, enum_raw, enum_desc))
+            frames = ecus.setdefault(l[4:].strip(), [])
+        elif l.startswith("FRAME "):
+            m = FRAME_RE.match(l)
+            frame = Frame(m[1], int(m[2], 0), group=group)
+            frames.append(frame)
+        elif l.startswith("SIGNAL "):
+            m = SIG_RE.match(l)
+            sig = Sig(m[1], m[4].strip(), int(m[2]), int(m[3]))
+            dt = (m[5] or "RAW").strip()
+            sig.dtype = dt.split("(")[0].strip()
+            if sig.dtype == "NUMBER":
+                a = re.search(r"_MULTIPLIER_:\s*([-+\d.eE]+)", dt)
+                b = re.search(r"_OFFSET_:\s*([-+\d.eE]+)", dt)
+                sig.mult = f32_short(float(a[1])) if a else 1.0
+                sig.off = f32_short(float(b[1])) if b else 0.0
+            frame.sigs.append(sig)
+        elif l.startswith("ENUM "):
+            m = ENUM_RE.match(l)
+            sig.enums.append((m[1], int(m[2]), m[3].strip()))
+    return ecus
 
 
-if current_signal and current_frame:
-    current_frame.add_signal(current_signal)
-    current_signal = None
-if current_frame and current_ecu:
-    current_ecu.add_frame(current_frame)
-    current_frame = None
-# Write last ECU in DB
-open("{}/{}.h".format(output_dir, current_ecu.name), 'w').write(current_ecu.make_output_str()) # Write tmp output str to file
+def cname(n):
+    if n.strip().lower() == "nicht definiert":
+        return "NDEF"
+    return re.sub(r"\W", "_", n.strip())
+
+
+def ctype(bits):
+    return "uint8_t" if bits <= 8 else "uint16_t" if bits <= 16 else "uint32_t" if bits <= 32 else "uint64_t"
+
+
+def lower_first(d):
+    return d[0].lower() + d[1:] if len(d) > 1 and d[1].islower() else d
+
+
+def desc(s):
+    d = lower_first(s.desc)
+    if s.dtype == "NUMBER":
+        d += f" (multiplier: {s.mult}, addend: {s.off})"
+    return f"DESC: {s.name} - {d}, OFFSET: {s.offset}, LEN: {s.length}"
+
+
+def split_bytes(s):
+    res, pos, end = [], s.offset, s.offset + s.length
+    while pos < end:
+        n = min(end, (pos // 8 + 1) * 8) - pos
+        res.append((pos, n))
+        pos += n
+    return res  # MSB first
+
+
+def pad(a, b):
+    out = []
+    while a < b:
+        if a % 8 == 0 and b - a >= 8:
+            n = min((b - a) // 8 * 8, 64)
+        else:
+            n = min(b, (a // 8 + 1) * 8) - a
+        out.append(Item(a, n, None, None, f"Padding, OFFSET: {a}, LEN: {n}"))
+        a += n
+    return out
+
+
+def enum_block(s, bits):
+    t, tn = ctype(bits), f"{s.name}_c"
+    o = ["/*", f"  enum class {tn} : {t} {{".ljust(39) + f"// {desc(s)}"]
+    for n, r, d in s.enums:
+        n = cname(n)
+        o.append(f"    {n:<30}= {r}, // enum: {r} - {d} / {n}")
+    o += [f"  }} : {bits}; {tn} {s.name};", "*/"]
+    return o
+
+
+def field_lines(it):
+    t = "bool" if (it.bits == 1 and (it.name is None or (it.sig and it.sig.dtype == "BOOL"))) else ctype(it.bits)
+    out = [f"  {t} {it.name or ''}".ljust(34) + f": {it.bits}; // {it.comment}"]
+    if it.sig and it.sig.dtype == "ENUM" and it.sig.enums:
+        out += enum_block(it.sig, it.bits)
+    return out
+
+
+def label(b0, b1):
+    return f"// byte {b0}" if b0 == b1 else f"// byte {b0}-{b1}"
+
+
+def gen_frame(ecu, fr):
+    items, extras, post, floats = [], [], [], []
+    for s in sorted(fr.sigs, key=lambda s: s.offset):
+        if s.dtype == "NUMBER" and (s.mult, s.off) != (1.0, 0.0):
+            floats.append(s)
+        ch = split_bytes(s)
+        if len(ch) == 1 or (s.offset % 8 == 0 and s.length % 8 == 0):
+            items.append(Item(s.offset, s.length, s.name, s, desc(s)))
+            if s.length > 8 and s.dtype != "ISO_TP":  # ISO-TP payload is raw bytes, no swap
+                w = int(ctype(s.length)[4:-2])
+                e = f"__builtin_bswap{w}({fr.name}.{s.name})" + (f" >> {w - s.length}" if w != s.length else "")
+                post.append([f"{fr.name}.{s.name} = {e};"])
+        else:
+            n, shift = len(ch), 0
+            for i in range(n):
+                st, ln = ch[n - 1 - i]
+                items.append(Item(st, ln, f"{s.name}_p{i}", None,
+                                  f"DESC: {s.name} - {lower_first(s.desc)} (part {i}), OFFSET: {st}, LEN: {ln}"))
+                shift += ln
+            extras.append(s)
+
+    # fill gaps
+    items.sort(key=lambda i: i.start)
+    filled, pos = [], 0
+    for it in items:
+        if it.start < pos:
+            print(f"WARNING: overlap in {fr.name} at {it.name} (offset {it.start})", file=sys.stderr)
+        elif it.start > pos:
+            filled += pad(pos, it.start)
+        filled.append(it)
+        pos = max(pos, it.start + it.bits)
+    if pos % 8:
+        filled += pad(pos, pos + (-pos % 8))
+        pos += -pos % 8
+    frame_bits = pos
+    filled.sort(key=lambda i: (i.start // 8, -i.start))
+
+    out = [f"// ECU: {ecu}, NAME: {fr.name}, ID: 0x{fr.can_id:04X}, MSG COUNT: {len(fr.sigs)}",
+           f"typedef struct {fr.name}_t {{"]
+    last = None
+    for it in filled:
+        lab = (it.start // 8, (it.start + it.bits - 1) // 8)
+        if lab != last:
+            out.append(label(*lab))
+            last = lab
+        out += field_lines(it)
+    out.append("// <- End of CAN Frame")
+
+    # extra (re-assembled) fields
+    pos, last = frame_bits, None
+    if extras or floats:
+        out += ["", "// extra bytes -> must set extern"]
+    if extras:
+        for s in extras:
+            n = len(split_bytes(s))
+            parts = " + ".join(f"{s.name}_p{i}" for i in range(n))
+            lab = (pos // 8, (pos + s.length - 1) // 8)
+            if lab != last:
+                out.append(label(*lab))
+                last = lab
+            it = Item(pos, s.length, s.name, s,
+                      f"DESC: {s.name} - {lower_first(s.desc)}, (concatenated {parts})")
+            out += field_lines(it)
+            shift, stmt = 0, [f"{fr.name}.{s.name} ="]
+            lens = [ln for _, ln in reversed(split_bytes(s))]
+            for i, ln in enumerate(lens):
+                e = f"{fr.name}.{s.name}_p{i}" + (f" << {shift}" if shift else "")
+                end = ";" if i == len(lens) - 1 else " |"
+                stmt.append(f"  ({e}){end} // {lower_first(s.desc)} (part {i})")
+                shift += ln
+            post.append(stmt)
+            pos += s.length
+        if pos % 8:
+            out += pad(pos, pos + (-pos % 8)) and \
+                [f"  uint8_t".ljust(34) + f": {-pos % 8}; // Padding, OFFSET: {pos}, LEN: {-pos % 8}"]
+    for s in floats:  # physical value = raw * multiplier + addend
+        out.append(f"  float {s.name}_f".ljust(34) + f"; // DESC: {s.name}_f - {lower_first(s.desc)}, "
+                   f"physical value = {s.name} * {s.mult} {'+' if s.off >= 0 else '-'} {abs(s.off)}")
+        e = f"{fr.name}.{s.name}" + (f" * {s.mult}f" if s.mult != 1.0 else "")
+        if s.off:
+            e += f" {'+' if s.off > 0 else '-'} {abs(s.off)}f"
+        post.append([f"{fr.name}.{s.name}_f = {e};"])
+    out.append(f"}} __attribute__((__packed__)) {fr.name}_t;")
+    return "\n".join(out), out[0], post
+
+
+def gen_all(entries):
+    return ("// AUTOGENERATED by convert.py\n"
+            "#pragma once\n\n"
+            + "\n\n".join(e["text"] for e in entries) + "\n")
+
+
+def aligned(pairs):
+    w = max(len(a) for a, _ in pairs)
+    return [f"{a.ljust(w)} {b}" for a, b in pairs]
+
+
+def gen_main(hname, entries):
+    groups = {}
+    for i, e in enumerate(entries):
+        groups.setdefault(e["fr"].group, []).append(i)
+    out = [f'#include "{hname}"\n']
+    # defines, one block per group
+    blocks = []
+    for idx in groups.values():
+        blocks.append("\n".join(aligned([(f"#define CANID_{entries[i]['fr'].name} 0x{entries[i]['fr'].can_id:04X}", "// " + entries[i]["hdr"])
+                                         for i in idx])))
+    out.append("\n\n".join(blocks))
+    out.append("""
+// copy CAN message into bitfield decoder
+#define copyMsg(ptr) importMsg(#ptr, ptr, sizeof(*(ptr)), id, msg, len)
+""")
+    for grp, idx in groups.items():
+        out.append(f"// {grp}")
+        out.append("\n".join(aligned([(f"struct {entries[i]['fr'].name}_t {entries[i]['fr'].name};",
+                                       "// " + entries[i]["hdr"]) for i in idx])))
+        out.append("")
+    out.append("""SemaphoreHandle_t canMutex;
+
+
+// import CAN message into bitfield decoder
+void importMsg(const char* name, void* dest, size_t destSize, unsigned int id, const uint8_t* msg, uint8_t len) {
+  if (len <= destSize) {
+    xSemaphoreTake(canMutex, portMAX_DELAY);
+    memcpy(dest, msg, len);
+    xSemaphoreGive(canMutex);
+  } else {
+    Serial.printf("WARNING: CANID 0x%04X (%s): frame too long, struct size is %d bytes\\r\\n", id, name, (int)destSize);
+    delay(100);
+  }
+}
+
+// export CAN message into bitfield decoder
+void exportMsg(unsigned int id, const uint8_t *msg, uint8_t len) {
+  switch(id) {""")
+    copies = aligned([(f"copyMsg(&{e['fr'].name});", "// " + e["hdr"]) for e in entries])
+    for i, e in enumerate(entries):
+        out.append(f"    case CANID_{e['fr'].name}:\n      {copies[i]}")
+        for stmt in e["post"]:
+            out.append("      " + stmt[0])
+            out += ["      " + x for x in stmt[1:]]
+        out.append("      break;")
+    out.append("""  }
+}
+
+void clearCan(unsigned long timeout_ms) {
+  static unsigned long now_ms = 0;
+  static long long last_flushed = -1;
+  if (millis() - now_ms > timeout_ms) {
+    now_ms = millis();
+    xSemaphoreTake(can0_stats.mutex, portMAX_DELAY);
+    long long msg_time = can0_stats.last_msg_time;
+    xSemaphoreGive(can0_stats.mutex);
+    const bool offline = (esp_timer_get_time() - msg_time) > (long long)timeout_ms * 1000LL || msg_time == 0;
+    if (offline && msg_time != last_flushed) {
+      xSemaphoreTake(canMutex, portMAX_DELAY);""")
+    out += ["      " + l for l in aligned([(f"memset(&{e['fr'].name}, 0, sizeof({e['fr'].name}));", "// " + e["hdr"])
+                                          for e in entries])]
+    out.append("""      xSemaphoreGive(canMutex);
+      last_flushed = msg_time;
+    }
+  }
+}
+""")
+    return "\n".join(out)
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    src = sys.argv[1]
+    base = os.path.splitext(src)[0]
+    hpath, mpath = base + ".h", os.path.join(os.path.dirname(os.path.abspath(src)), "main.cpp")
+    entries, seen, ids = [], {}, {}
+    sig_of = lambda fr: [(x.name, x.offset, x.length, x.dtype, x.mult, x.off, x.enums) for x in fr.sigs]
+    for ecu, frames in parse(src).items():
+        for fr in frames:
+            if fr.name in seen:  # same frame listed under several ECUs (sender/receiver): keep the first
+                if sig_of(seen[fr.name]) != sig_of(fr):
+                    print(f"WARNING: {fr.name} under ECU {ecu} differs from first definition, skipped", file=sys.stderr)
+                continue
+            seen[fr.name] = fr
+            if fr.can_id in ids:
+                print(f"WARNING: CAN ID 0x{fr.can_id:04X} used by {ids[fr.can_id]} and {fr.name} (duplicate case)", file=sys.stderr)
+            ids.setdefault(fr.can_id, fr.name)
+            if fr.sigs:
+                text, hdr, post = gen_frame(ecu, fr)
+                entries.append(dict(fr=fr, text=text, hdr=hdr[3:], post=post))
+    with open(hpath, "w", encoding="utf-8") as f:
+        f.write(gen_all(entries))
+    with open(mpath, "w", encoding="utf-8") as f:
+        f.write(gen_main(os.path.basename(hpath), entries))
+    print(f"{hpath}, {mpath}: {len(entries)} frames")
+
+
+if __name__ == "__main__":
+    main()
